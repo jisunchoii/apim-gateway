@@ -12,8 +12,7 @@ OpenAI 호환 LLM 게이트웨이입니다.
 ## 이름 체계
 
 - **LLM Gateway**는 제품과 Workbook의 표시 이름입니다.
-- `prefix`는 Azure resource name에 사용하는 환경별 짧은 이름입니다. 신규 기본값은 `llmgw`이며,
-  기존 `claudegw` 배포는 리소스 재생성을 피하기 위해 그대로 유지할 수 있습니다.
+- `prefix`는 Azure resource name에 사용하는 환경별 짧은 이름입니다. 기본값은 `llmgw` 입니다.
 - `trace_source`는 Azure Monitor trace 구분자입니다. 신규 기본값은 `llm-gateway`이며 운영 KQL은
   문자열을 하드코딩하지 않고 Terraform output을 사용합니다.
 - 저장소 디렉터리 이름은 Azure resource name이나 trace source 계약에 포함되지 않습니다.
@@ -63,7 +62,7 @@ cp infra/terraform.tfvars.example infra/terraform.tfvars
 
 ### 1. Terraform state
 
-현재 배포는 기존 local state를 그대로 유지합니다. **신규 환경은 Azure Blob remote state를
+**신규 환경은 Azure Blob remote state를
 기본으로 생성**하며, 첫 `terraform init` 전에 반드시 bootstrap을 실행합니다. 스크립트가
 Entra ID 인증을 사용하는 ignore된 `infra/backend.tf`를 생성하므로 shared key나 access key는
 사용하지 않습니다.

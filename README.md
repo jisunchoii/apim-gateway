@@ -1,4 +1,4 @@
-# LLM Gateway 고객 사용 안내
+# LLM Gateway 사용 안내
 
 이 Gateway는 회사에서 승인한 Microsoft Foundry 모델을 OpenAI 호환 API로 제공합니다. 고객은
 Keycloak Device Authorization Grant로 로그인하고 Azure API Management(APIM)에 bearer token을
@@ -13,9 +13,6 @@ Gateway base URL은 운영자가 안내하며, 운영자는 Terraform output `ga
 ```text
 https://<apim-name>.azure-api.net/openai/v1
 ```
-
-`claudegw`는 기존 개발 배포의 보존된 `prefix`입니다. 신규 배포 예시는 `llmgw`를 사용하며,
-제품 이름은 배포 prefix와 관계없이 **LLM Gateway**입니다.
 
 Keycloak 연결에는 다음 값이 필요합니다.
 
