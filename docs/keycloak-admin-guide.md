@@ -19,6 +19,104 @@ Keycloak 토큰과 APIM 정책의 값은 반드시 서로 일치해야 합니다
 | 역할 claim | `llm_gateway_roles` |
 | CLI 요청 scope | `openid llm-gateway` |
 
+### 구성 계층
+
+아래 구조에서 `llm-gateway` client scope가 audience, 사용자 표시 이름, API 역할을 access token
+claim으로 변환합니다.
+
+```text
+Realm: <customer-realm>
+├─ Client: llm-gateway-api
+│  └─ Client role
+│     └─ invoke
+├─ Client scope: llm-gateway
+│  ├─ Setting
+│  │  └─ Include in token scope: On
+│  ├─ Protocol mappers
+│  │  ├─ llm-gateway-audience
+│  │  │  └─ aud += llm-gateway-api
+│  │  ├─ llm-gateway-user-label
+│  │  │  └─ username -> llm_gateway_user
+│  │  └─ llm-gateway-client-roles
+│  │     └─ llm-gateway-api client roles -> llm_gateway_roles[]
+│  └─ Scope role mapping
+│     └─ llm-gateway-api / invoke
+├─ Client: llm-gateway-cli
+│  ├─ Public client: Client authentication Off
+│  ├─ Grant: OAuth 2.0 Device Authorization Grant
+│  ├─ Optional client scope: llm-gateway
+│  └─ Dedicated scope
+│     └─ Full scope allowed: Off
+└─ User or group
+   └─ Role mapping
+      └─ llm-gateway-api / invoke
+```
+
+### `scope` 용어 구분
+
+`scope=openid llm-gateway`는 하나의 중첩 객체가 아니라 공백으로 구분된 두 scope 이름입니다.
+
+| 위치 | 값 | 의미 |
+|---|---|---|
+| Device Authorization 요청 | `scope=openid llm-gateway` | CLI가 Keycloak에 요청하는 scope 목록 |
+| 요청 scope | `openid` | OIDC 인증 요청임을 나타내는 표준 scope |
+| 요청 scope | `llm-gateway` | 이 가이드에서 생성하는 Optional client scope를 활성화 |
+| Keycloak client scope | `llm-gateway` | mapper 3개와 `invoke` 역할 범위 설정을 묶은 구성 객체 |
+| Access token claim | `"scope": "openid llm-gateway ..."` | Keycloak이 허용한 scope 이름 목록 |
+| Client scope의 **Scope** 탭 | `llm-gateway-api / invoke` | 토큰에 노출할 수 있는 역할 범위 |
+
+`llm-gateway` client scope 안의 mapper 결과가 `scope` claim 아래에 중첩되는 것은 아닙니다.
+`scope` claim에는 `llm-gateway`라는 이름만 기록되고, mapper 결과는 `aud`,
+`llm_gateway_user`, `llm_gateway_roles`라는 별도 claim으로 생성됩니다. realm의 default client
+scope 설정에 따라 `scope` claim에 `profile`, `email` 같은 값이 추가될 수 있으며, APIM은 전체
+문자열이 정확히 일치하는지 보지 않고 공백으로 나눈 값 중 `llm-gateway`가 있는지만 확인합니다.
+
+### 역할 claim 생성 조건
+
+`llm_gateway_roles`에 `invoke`가 포함되려면 다음 조건을 모두 만족해야 합니다.
+
+1. 사용자 또는 사용자가 속한 그룹이 `llm-gateway-api / invoke` 역할을 보유합니다.
+2. `llm-gateway` client scope의 **Scope** 탭에 같은 역할이 허용되어 있습니다.
+3. `llm-gateway-cli`에 `llm-gateway`가 Optional client scope로 연결되어 있습니다.
+4. CLI가 Device Authorization 요청에서 `llm-gateway` scope를 실제로 요청합니다.
+5. `llm-gateway-client-roles` mapper가 access token에 client roles를 기록하도록 설정되어 있습니다.
+
+`Full scope allowed=Off`일 때 역할 관점의 핵심 관계는 다음과 같습니다.
+
+```text
+access token에 노출 가능한 역할
+  = 사용자/그룹의 유효 역할
+  ∩ client scope의 Scope role mapping
+```
+
+따라서 사용자에게 역할만 할당하거나 client scope에 역할만 허용해서는 충분하지 않습니다.
+두 곳 모두에 `llm-gateway-api / invoke`가 있어야 mapper가 `llm_gateway_roles`에 `invoke`를
+기록할 수 있습니다.
+
+### Terraform 및 APIM 대응값
+
+```hcl
+oidc_provider = {
+  client_id        = "llm-gateway-cli"
+  client_scope     = "openid llm-gateway"
+  audience         = "llm-gateway-api"
+  required_scope   = "llm-gateway"
+  scope_claim      = "scope"
+  role_claim       = "llm_gateway_roles"
+  required_role    = "invoke"
+  user_label_claim = "llm_gateway_user"
+}
+```
+
+| Terraform 값 | Keycloak 또는 token 위치 | APIM 용도 |
+|---|---|---|
+| `client_id` | Device Flow의 `client_id` | CLI가 로그인할 public client |
+| `client_scope` | Device Flow의 `scope` 요청값 | `openid`와 `llm-gateway` 요청 |
+| `audience` | access token의 `aud` | Gateway용 token인지 검증 |
+| `required_scope` | `scope` claim 안의 한 항목 | `llm-gateway` 요청·허용 여부 검증 |
+| `role_claim` + `required_role` | `llm_gateway_roles[]`의 `invoke` | 사용자의 Gateway 호출 권한 검증 |
+| `user_label_claim` | `llm_gateway_user` | Workbook 표시 이름이며 인가 조건은 아님 |
+
 ## 1. 대상 realm 선택
 
 Admin Console에 로그인하고 고객 사용자가 존재하는 realm을 선택합니다. `master` realm에 구성하지
@@ -209,12 +307,20 @@ access token을 확인합니다. 실제 Device Flow 로그인으로 새 토큰�
 }
 ```
 
-| 누락된 값 | 확인할 Keycloak 설정 |
-|---|---|
-| `aud` | `llm-gateway-audience` mapper와 Add to access token |
-| `scope` | CLI client의 optional scope 연결과 CLI 요청 scope |
-| `llm_gateway_user` | `llm-gateway-user-label` User Property mapper와 Add to access token |
-| `llm_gateway_roles` | 사용자/그룹 역할, User Client Role mapper, client scope의 Scope role mapping |
+`scope` claim에는 realm의 default client scope가 더 포함될 수 있습니다. Gateway 인가에 필요한
+조건은 공백으로 구분된 항목 중 `llm-gateway`가 존재하는 것입니다.
+
+| Claim | 필수 여부 | 생성 원인 | 누락 시 확인할 설정 |
+|---|---|---|---|
+| `iss`, `sub` | 필수 | Keycloak 표준 claim | realm issuer와 로그인 사용자 |
+| `aud`의 `llm-gateway-api` | 필수 | Audience mapper | `llm-gateway-audience`, Add to access token |
+| `scope`의 `llm-gateway` | 필수 | 요청 scope + Include in token scope | Optional scope 연결, CLI 요청값, Include in token scope |
+| `llm_gateway_roles`의 `invoke` | 필수 | 사용자 역할과 허용 역할의 교집합 + role mapper | 사용자/그룹 역할, Scope role mapping, User Client Role mapper |
+| `llm_gateway_user` | 표시용 | User Property mapper | `llm-gateway-user-label`, Add to access token |
+
+APIM은 `iss`, 서명, `aud`, `scope=llm-gateway`, `llm_gateway_roles=invoke`를 인가에 사용합니다.
+`llm_gateway_user`가 없으면 요청을 거부하지 않고 `iss:sub` 해시 앞 12자리를 Workbook 표시값으로
+사용합니다.
 
 설정을 변경하기 전에 발급한 access token은 내용이 바뀌지 않습니다. OpenCode 같은 CLI를 완전히
 종료하고 새 Device Flow 로그인을 수행합니다.
