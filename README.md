@@ -106,16 +106,16 @@ Chat 전용 `stream_options`를 제거합니다.
 ### OpenCode
 
 `opencode.json`은 `scripts/keycloak/opencode-keycloak-hook.js`를 로드합니다. Hook은 최초에만
-Device Flow로 로그인하고 access/refresh token을 사용자 프로필의 `.llmgw\keycloak-token.json`에
+Device Flow로 로그인하고 access/refresh token을 사용자 프로필의 `~/.llmgw/keycloak-token.json`에
 저장한 뒤 만료 전에 자동 갱신합니다. 캐시 경로는 `LLMGW_OIDC_CACHE_PATH`로 변경할 수 있습니다.
 모델 목록과 기본 모델은 main Terraform의 `opencode_model_config` output에서 읽으므로
 `routed_models`와 별도로 하드코딩하지 않습니다.
 
-```powershell
-$env:LLMGW_BASE_URL = "https://<apim-name>.azure-api.net/openai/v1"
-$env:LLMGW_OIDC_DISCOVERY_URL = "https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
-$env:LLMGW_OIDC_CLIENT_ID = "llm-gateway-cli"
-$env:LLMGW_OIDC_SCOPE = "openid llm-gateway"
+```bash
+export LLMGW_BASE_URL="https://<apim-name>.azure-api.net/openai/v1"
+export LLMGW_OIDC_DISCOVERY_URL="https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
+export LLMGW_OIDC_CLIENT_ID="llm-gateway-cli"
+export LLMGW_OIDC_SCOPE="openid llm-gateway"
 
 opencode
 ```
@@ -123,25 +123,24 @@ opencode
 Terraform state에 접근할 수 없는 고객 PC에서는 운영자가 제공한 목록을 환경 변수로 설정합니다.
 값은 쉼표 구분 문자열 또는 JSON 배열입니다.
 
-```powershell
-$env:LLMGW_OPENCODE_RESPONSES_MODELS = "gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna"
-$env:LLMGW_OPENCODE_CHAT_MODELS = "FW-GLM-5.2,FW-Kimi-K3"
-$env:LLMGW_OPENCODE_DEFAULT_MODEL = "gpt-5.6-sol"
-$env:LLMGW_OPENCODE_SMALL_MODEL = "gpt-5.6-luna"
+```bash
+export LLMGW_OPENCODE_RESPONSES_MODELS="gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna"
+export LLMGW_OPENCODE_CHAT_MODELS="FW-GLM-5.2,FW-Kimi-K3"
+export LLMGW_OPENCODE_DEFAULT_MODEL="gpt-5.6-sol"
+export LLMGW_OPENCODE_SMALL_MODEL="gpt-5.6-luna"
 ```
 
-단발성 호출은 `openai/<model>` 또는 `foundry/<model>` 형식을 사용합니다. Terraform이 직접
-관리하는 `model_deployments`는 `openai` Responses provider에, 기존 프로젝트를 참조하는
-`project_model_deployments`는 `foundry` Chat Completions provider에 배치됩니다.
+단발성 호출은 `openai/<model>` 또는 `foundry/<model>` 형식을 사용합니다. provider는 모델을
+어디서 생성했는지가 아니라 각 deployment의 `opencode_api` 값으로 결정됩니다.
+`responses`는 `openai`, `chat`은 `foundry` provider에 배치됩니다.
 
-```powershell
+```bash
 opencode run --model openai/gpt-5.6-sol "Reply with exactly: OK"
 opencode run --model foundry/FW-GLM-5.2 "Reply with exactly: OK"
 ```
 
-Foundry project 모델은 현재 OpenCode Responses stream parser와 호환되지 않으므로 Chat
-Completions adapter를 사용합니다. project 모델 중 GPT 계열을 Chat으로 호출할 때 Hook은
-지원되지 않는 Responses 전용 reasoning 옵션을 제거합니다.
+Responses stream과 호환되지 않는 모델은 `opencode_api = "chat"`으로 설정합니다. GPT 계열을
+Chat으로 호출하도록 설정한 경우 Hook은 지원되지 않는 Responses 전용 reasoning 옵션을 제거합니다.
 
 ### Codex CLI
 
@@ -160,12 +159,12 @@ wire_api = "responses"
 
 [model_providers.llmgw.auth]
 command = "node"
-args = ["C:\\path\\to\\apim-gateway\\scripts\\keycloak\\keycloak-token.js"]
+args = ["/absolute/path/to/apim-gateway/scripts/keycloak/keycloak-token.js"]
 refresh_interval_ms = 240000
 ```
 
 `keycloak-token.js`는 안내 문구를 표준 오류에, access token만 표준 출력에 기록합니다. refresh
-token은 OpenCode hook과 같은 사용자 프로필의 `.llmgw\keycloak-token.json`에 저장되며 소스 코드나
+token은 OpenCode hook과 같은 사용자 프로필의 `~/.llmgw/keycloak-token.json`에 저장되며 소스 코드나
 `.env`에는 저장하지 않습니다.
 
 Node helper는 Node.js 20 이상을 지원합니다. 커밋 대상 helper의 구문 검사는 `npm run check`로

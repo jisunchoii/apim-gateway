@@ -33,6 +33,8 @@ resource "azurerm_api_management" "apim" {
 }
 
 resource "azurerm_cognitive_account" "foundry" {
+  for_each = local.managed_foundry_accounts
+
   name                  = local.foundry_name
   resource_group_name   = azurerm_resource_group.rg.name
   location              = var.location
@@ -59,6 +61,11 @@ resource "azurerm_cognitive_account" "foundry" {
   }
 }
 
+moved {
+  from = azurerm_cognitive_account.foundry
+  to   = azurerm_cognitive_account.foundry["gateway"]
+}
+
 data "azapi_resource" "external_foundry_project" {
   for_each = local.external_foundry_project_ids
 
@@ -70,7 +77,7 @@ data "azapi_resource" "external_foundry_project" {
 resource "azurerm_cognitive_deployment" "models" {
   for_each             = var.model_deployments
   name                 = each.key
-  cognitive_account_id = azurerm_cognitive_account.foundry.id
+  cognitive_account_id = azurerm_cognitive_account.foundry["gateway"].id
 
   model {
     format  = each.value.model_format
@@ -89,8 +96,11 @@ resource "azurerm_cognitive_deployment" "models" {
 # Gateway는 Azure OpenAI 호환 추론 작업만 제공하므로 범위가 넓은 Cognitive Services User 대신
 # 모델 추론에 필요한 Cognitive Services OpenAI User 역할만 부여한다.
 resource "azurerm_role_assignment" "apim_to_foundry" {
-  for_each             = toset(["Cognitive Services OpenAI User"])
-  scope                = azurerm_cognitive_account.foundry.id
+  for_each = local.managed_foundry_account_enabled ? toset([
+    "Cognitive Services OpenAI User"
+  ]) : toset([])
+
+  scope                = azurerm_cognitive_account.foundry["gateway"].id
   role_definition_name = each.key
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }

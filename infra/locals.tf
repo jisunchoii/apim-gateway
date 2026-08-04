@@ -33,6 +33,14 @@ locals {
   foundry_name      = "ais-${local.name_suffix}-${local.sfx}"
   foundry_openai_v1 = "https://${local.foundry_name}.openai.azure.com/openai/v1"
 
+  managed_foundry_account_enabled = coalesce(
+    var.managed_foundry_account_enabled,
+    length(var.model_deployments) > 0
+  )
+  managed_foundry_accounts = local.managed_foundry_account_enabled ? {
+    gateway = true
+  } : {}
+
   external_foundry_project_ids = toset([
     for deployment in values(var.project_model_deployments) :
     deployment.project_resource_id
@@ -44,6 +52,7 @@ locals {
       backend_url   = local.foundry_openai_v1
       auth_resource = "https://cognitiveservices.azure.com"
       capacity_tpm  = deployment.capacity * 1000
+      opencode_api  = deployment.opencode_api
     }
   }
   project_model_targets = {
@@ -55,6 +64,7 @@ locals {
       )}/openai/v1"
       auth_resource = "https://ai.azure.com"
       capacity_tpm  = deployment.capacity_tpm
+      opencode_api  = deployment.opencode_api
     }
   }
   model_targets      = merge(local.managed_model_targets, local.project_model_targets)
@@ -75,6 +85,14 @@ locals {
     model_name => local.model_targets[model_name].auth_resource
     if contains(local.deployed_models, model_name)
   }
+  opencode_responses_models = [
+    for model_name in local.routed_models :
+    model_name if try(local.model_targets[model_name].opencode_api == "responses", false)
+  ]
+  opencode_chat_models = [
+    for model_name in local.routed_models :
+    model_name if try(local.model_targets[model_name].opencode_api == "chat", false)
+  ]
 
   # Catch invalid policy routes before APIM accepts a configuration that can only fail at request time.
   undeployed_routed = setsubtract(local.routed_models, local.deployed_models)

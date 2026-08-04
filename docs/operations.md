@@ -104,14 +104,20 @@ terraform -chdir=infra apply
 |---|---|
 | `model_deployments` | 이 Terraform이 생성하고 관리하는 모델 배포 |
 | `project_model_deployments` | 다른 Foundry 프로젝트에 이미 존재하는 모델 연결 |
+| `managed_foundry_account_enabled` | `null` 자동 생성, `true` 빈 계정 유지, `false` 관리형 계정 비활성화 |
 | `routed_models` | APIM policy가 요청을 전달할 모델 목록 |
 | `opencode_default_model` | OpenCode 시작 시 선택할 routed model |
 | `opencode_small_model` | OpenCode 경량 작업에 사용할 routed model |
 
 `routed_models`를 생략하면 배포된 모든 모델을 라우팅합니다.
-`opencode_model_config` output은 이 설정과 deployment map에서 OpenCode provider별 모델 목록을
-생성합니다. `model_deployments`는 Responses provider, `project_model_deployments`는 Chat
-Completions provider로 노출되므로 Hook의 whitelist를 따로 수정하지 않습니다.
+각 deployment의 `opencode_api`는 `responses` 또는 `chat`이며, 관리형 모델은 Responses,
+기존 프로젝트 모델은 Chat이 기본값입니다. 기존 프로젝트의 GPT 모델처럼 Responses를 사용해야
+하면 해당 항목에 `opencode_api = "responses"`를 지정합니다.
+
+`model_deployments = {}`이고 `managed_foundry_account_enabled = null`이면 Gateway 전용 Foundry
+계정을 생성하지 않습니다. 나중에 `model_deployments`에 첫 모델을 추가하면 같은 apply에서 계정,
+RBAC, 모델 배포와 APIM backend를 생성합니다. 마지막 관리형 모델을 제거한 뒤 빈 계정을 유지하려면
+제거 전에 `managed_foundry_account_enabled = true`를 적용합니다.
 
 **모델 추가**
 
@@ -137,6 +143,7 @@ project_model_deployments = {
   "existing-model" = {
     project_resource_id = "/subscriptions/<subscription>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
     capacity_tpm        = 500000
+    opencode_api        = "responses"
   }
 }
 ```

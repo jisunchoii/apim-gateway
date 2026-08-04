@@ -9,8 +9,13 @@ output "apim_public_ip_addresses" {
 }
 
 output "foundry_account_name" {
-  description = "AIServices account backing the gateway. Use with `az cognitiveservices account deployment list`."
-  value       = azurerm_cognitive_account.foundry.name
+  description = "Gateway-owned AIServices account name, or null when only existing project models are connected."
+  value       = try(azurerm_cognitive_account.foundry["gateway"].name, null)
+}
+
+output "managed_foundry_account_enabled" {
+  description = "Whether this stack currently creates a gateway-owned Foundry account."
+  value       = local.managed_foundry_account_enabled
 }
 
 output "log_analytics_workspace_id" {
@@ -79,17 +84,11 @@ output "routed_models" {
 }
 
 output "opencode_model_config" {
-  description = "OpenCode provider groups and defaults derived from the routed Terraform model configuration."
+  description = "OpenCode provider groups and defaults derived from each routed model's opencode_api."
   value = {
-    responses_models = [
-      for model_name in local.routed_models :
-      model_name if contains(keys(var.model_deployments), model_name)
-    ]
-    chat_models = [
-      for model_name in local.routed_models :
-      model_name if contains(keys(var.project_model_deployments), model_name)
-    ]
-    default_model = coalesce(var.opencode_default_model, local.routed_models[0])
+    responses_models = local.opencode_responses_models
+    chat_models      = local.opencode_chat_models
+    default_model    = coalesce(var.opencode_default_model, local.routed_models[0])
     small_model = coalesce(
       var.opencode_small_model,
       try(local.routed_models[1], local.routed_models[0])

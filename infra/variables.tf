@@ -101,6 +101,25 @@ variable "apim_publisher_email" {
   description = "Publisher email for API Management notifications."
 }
 
+variable "managed_foundry_account_enabled" {
+  type        = bool
+  default     = null
+  nullable    = true
+  description = <<-EOT
+    Controls the gateway-owned Foundry account used by model_deployments. Null creates the account
+    automatically when model_deployments is non-empty. True keeps the account even when no managed
+    deployments remain. False disables the account and requires model_deployments to be empty.
+  EOT
+
+  validation {
+    condition = (
+      var.managed_foundry_account_enabled != false ||
+      length(var.model_deployments) == 0
+    )
+    error_message = "managed_foundry_account_enabled cannot be false when model_deployments is non-empty."
+  }
+}
+
 variable "model_deployments" {
   type = map(object({
     model_name             = string
@@ -109,6 +128,7 @@ variable "model_deployments" {
     version_upgrade_option = optional(string, "NoAutoUpgrade")
     sku_name               = string
     capacity               = number
+    opencode_api           = optional(string, "responses")
   }))
   description = <<-EOT
     Model deployments keyed by deployment name. Keep the deployment name identical to the model name so
@@ -116,12 +136,8 @@ variable "model_deployments" {
     of tokens per minute for GlobalStandard, so 20000 == 20M TPM -- but apply fails if it exceeds the
     region's granted quota, which defaults to single-digit millions. Check with
     `az cognitiveservices usage list -l <region> -o table` and request an increase before raising it.
+    opencode_api selects the OpenCode provider protocol and defaults to responses.
   EOT
-
-  validation {
-    condition     = length(var.model_deployments) > 0
-    error_message = "model_deployments must contain at least one deployment."
-  }
 
   validation {
     condition = alltrue([
@@ -141,20 +157,38 @@ variable "model_deployments" {
     ])
     error_message = "Every model deployment capacity must be a positive whole number."
   }
+
+  validation {
+    condition = alltrue([
+      for deployment in values(var.model_deployments) :
+      contains(["responses", "chat"], deployment.opencode_api)
+    ])
+    error_message = "Every managed model opencode_api must be responses or chat."
+  }
 }
 
 variable "project_model_deployments" {
   type = map(object({
     project_resource_id = string
     capacity_tpm        = number
+    opencode_api        = optional(string, "chat")
   }))
   default     = {}
   description = <<-EOT
     Existing model deployments exposed through a Foundry project endpoint. Terraform references the
     project but does not own or recreate the model deployment. The map key is the deployment name sent
     by clients. capacity_tpm is the deployment's effective token-per-minute limit used by governance
-    dashboards; keep it aligned with the deployment owned by the source project.
+    dashboards; keep it aligned with the deployment owned by the source project. opencode_api selects
+    the OpenCode provider protocol and defaults to chat.
   EOT
+
+  validation {
+    condition = (
+      length(var.model_deployments) +
+      length(var.project_model_deployments)
+    ) > 0
+    error_message = "At least one model must be configured in model_deployments or project_model_deployments."
+  }
 
   validation {
     condition = alltrue([
@@ -172,6 +206,14 @@ variable "project_model_deployments" {
       deployment.capacity_tpm > 0 && floor(deployment.capacity_tpm) == deployment.capacity_tpm
     ])
     error_message = "Every project model capacity_tpm must be a positive whole number."
+  }
+
+  validation {
+    condition = alltrue([
+      for deployment in values(var.project_model_deployments) :
+      contains(["responses", "chat"], deployment.opencode_api)
+    ])
+    error_message = "Every project model opencode_api must be responses or chat."
   }
 
   validation {

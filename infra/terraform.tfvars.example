@@ -78,40 +78,25 @@ model_pricing_usd_per_million = {
   }
 }
 
-# deployment 이름과 모델 이름을 같게 사용하므로 클라이언트는 실제 모델 ID를 전송한다.
-# GPT-5.6 family의 현재 모델 version은 2026-07-09다.
-# GlobalStandard의 capacity 단위는 1,000 TPM이므로 500은 모델별 500K TPM이다.
-# quota tier와 지역별 가용성은 subscription마다 다르므로 적용 전에 반드시 확인한다.
-#   az cognitiveservices usage list -l eastus2 -o table
-#   az cognitiveservices model list -l eastus2 --query "[?starts_with(model.name, 'gpt-5.6-')].{name:model.name, version:model.version, skus:model.skus[].name}" -o table
-model_deployments = {
-  "gpt-5.6-sol" = {
-    model_name             = "gpt-5.6-sol"
-    model_format           = "OpenAI"
-    model_version          = "2026-07-09"
-    version_upgrade_option = "NoAutoUpgrade"
-    sku_name               = "GlobalStandard"
-    capacity               = 500
-  }
-  "gpt-5.6-terra" = {
-    model_name             = "gpt-5.6-terra"
-    model_format           = "OpenAI"
-    model_version          = "2026-07-09"
-    version_upgrade_option = "NoAutoUpgrade"
-    sku_name               = "GlobalStandard"
-    capacity               = 500
-  }
-  "gpt-5.6-luna" = {
-    model_name             = "gpt-5.6-luna"
-    model_format           = "OpenAI"
-    model_version          = "2026-07-09"
-    version_upgrade_option = "NoAutoUpgrade"
-    sku_name               = "GlobalStandard"
-    capacity               = 500
-  }
-}
+# null은 model_deployments가 비어 있으면 계정을 만들지 않고, 나중에 모델이 추가되면 자동 생성한다.
+# 마지막 관리형 모델 제거 후 빈 계정을 유지하려면 제거 전에 true로 변경한다.
+managed_foundry_account_enabled = null
+model_deployments               = {}
 
-# 기존 Foundry 프로젝트 endpoint로 노출된 Fireworks 모델 배포를 연결한다.
+# 나중에 Terraform 관리 모델을 추가하면 같은 apply에서 전용 Foundry 계정과 배포가 생성된다.
+# model_deployments = {
+#   "new-model" = {
+#     model_name             = "new-model"
+#     model_format           = "OpenAI"
+#     model_version          = "<version>"
+#     version_upgrade_option = "NoAutoUpgrade"
+#     sku_name               = "GlobalStandard"
+#     capacity               = 500
+#     opencode_api           = "responses"
+#   }
+# }
+
+# 기존 Foundry 프로젝트 endpoint로 노출된 모델 배포를 연결한다.
 # Terraform은 프로젝트 endpoint를 조회하고 APIM 관리 ID에 Foundry User 역할을 할당하지만,
 # 원본 모델 배포를 생성·수정·재생성하지 않는다. capacity_tpm은 실제 quota 설정이 아니라
 # Workbook의 사용률과 여유량 계산에 사용하는 기준값이므로 실제 배포 TPM과 동일하게 입력한다.
@@ -119,12 +104,29 @@ model_deployments = {
 # 기존 Foundry 프로젝트의 ARM resource ID 조회:
 #   az cognitiveservices account project show --name <foundry-resource-name> --project-name <project-name> --resource-group <resource-group-name> --query id -o tsv
 project_model_deployments = {
+  "gpt-5.6-sol" = {
+    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
+    capacity_tpm        = 500000
+    opencode_api        = "responses"
+  }
+  "gpt-5.6-terra" = {
+    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
+    capacity_tpm        = 500000
+    opencode_api        = "responses"
+  }
+  "gpt-5.6-luna" = {
+    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
+    capacity_tpm        = 500000
+    opencode_api        = "responses"
+  }
   "FW-GLM-5.2" = {
     project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
     capacity_tpm        = 200000
+    opencode_api        = "chat"
   }
   "FW-Kimi-K3" = {
     project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
     capacity_tpm        = 300000
+    opencode_api        = "chat"
   }
 }
