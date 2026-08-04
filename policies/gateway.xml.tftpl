@@ -1,0 +1,201 @@
+<policies>
+  <inbound>
+    <base />
+
+    <!-- 1. 사용자 인증 및 인가
+         구독 키 없이 Keycloak bearer token만 허용한다. 서명, issuer, audience와 필수 scope/role을
+         모두 검증하므로 조건을 만족하지 못한 요청은 모델 backend에 도달하기 전에 401로 종료된다. -->
+    <validate-jwt header-name="Authorization" require-scheme="Bearer"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized. A valid access token is required."
+                  output-token-variable-name="jwt">
+      <openid-config url="${oidc_openid_config_url}" validate-connectivity="false" />
+      <audiences><audience>${oidc_audience}</audience></audiences>
+%{ if oidc_issuer != "" ~}
+      <issuers><issuer>${oidc_issuer}</issuer></issuers>
+%{ endif ~}
+%{ if oidc_required_scope != "" || oidc_required_role != "" ~}
+      <required-claims>
+%{ if oidc_required_scope != "" ~}
+        <!-- Keycloak의 scope claim은 공백으로 구분된 문자열이다. -->
+        <claim name="${oidc_scope_claim}" match="any" separator=" ">
+          <value>${oidc_required_scope}</value>
+        </claim>
+%{ endif ~}
+%{ if oidc_required_role != "" ~}
+        <claim name="${oidc_role_claim}" match="any">
+          <value>${oidc_required_role}</value>
+        </claim>
+%{ endif ~}
+      </required-claims>
+%{ endif ~}
+    </validate-jwt>
+
+    <!-- 2. 클라이언트 자격 증명 제거
+         Gateway와 Foundry backend는 API key나 APIM 구독 키를 사용하지 않는다. 클라이언트가
+         실수로 보낸 키가 backend로 전달되지 않도록 header와 query parameter에서 제거한다. -->
+    <set-header name="api-key" exists-action="delete" />
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
+
+    <!-- 3. 감사 추적용 사용자 및 요청 모델 식별
+         집계와 제한에는 Keycloak iss:sub 해시를 사용하고, Workbook 표시에는 별도 username
+         claim을 사용한다. 표시 claim이 없으면 해시 앞 12자리로 대체한다. -->
+    <set-variable name="userId" value='@{
+        var jwt = (Jwt)context.Variables["jwt"];
+        var subject = string.IsNullOrEmpty(jwt.Subject) ? "unknown" : jwt.Subject;
+        var identity = jwt.Issuer + ":" + subject;
+        var hasher = System.Security.Cryptography.SHA256.Create();
+        var digest = hasher.ComputeHash(System.Text.Encoding.UTF8.GetBytes(identity));
+        hasher.Dispose();
+        return System.BitConverter.ToString(digest).Replace("-", "").ToLowerInvariant();
+    }' />
+
+    <set-variable name="userLabel" value='@{
+        var jwt = (Jwt)context.Variables["jwt"];
+        var fallback = ((string)context.Variables["userId"]).Substring(0, 12);
+
+        if (!jwt.Claims.ContainsKey("${oidc_user_label_claim}"))
+        {
+            return fallback;
+        }
+
+        var label = jwt.Claims["${oidc_user_label_claim}"].FirstOrDefault();
+        return string.IsNullOrWhiteSpace(label) ? fallback : label;
+    }' />
+
+    <set-variable name="requestedModel" value='@{
+        try {
+            var body = context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;(preserveContent: true);
+            var token = body["model"];
+            return token != null &amp;&amp; token.Type == Newtonsoft.Json.Linq.JTokenType.String
+                ? (string)token
+                : "";
+        } catch {
+            return (string)null;
+        }
+    }' />
+    <set-variable name="traceModel" value='@{
+        var model = (string)context.Variables["requestedModel"];
+        return string.IsNullOrWhiteSpace(model) ? "(missing)" : model;
+    }' />
+
+    <!-- 인증 이후 즉시 추적 정보를 남긴다. 따라서 400과 403도 사용자별로 집계되며,
+         JWT 검증 전에 종료되는 401만 의도적으로 익명으로 남는다. -->
+    <trace source="${trace_source}" severity="error">
+      <message>@("user=" + (string)context.Variables["userId"] + " model=" + (string)context.Variables["traceModel"])</message>
+      <metadata name="userId" value='@((string)context.Variables["userId"])' />
+      <metadata name="userLabel" value='@((string)context.Variables["userLabel"])' />
+      <metadata name="requestedModel" value='@((string)context.Variables["traceModel"])' />
+    </trace>
+
+    <!-- 4. 요청 본문 기본 검증 -->
+    <choose>
+      <when condition='@(context.Variables["requestedModel"] == null)'>
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>{"error":"invalid JSON body"}</set-body>
+        </return-response>
+      </when>
+      <when condition='@(string.IsNullOrWhiteSpace((string)context.Variables["requestedModel"]))'>
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>{"error":"model is required"}</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+    <!-- 5. 모델 허용 목록 검증 및 backend 정보 결정
+         지원하지 않는 모델은 토큰 제한이나 관리 ID 토큰 발급 전에 403으로 종료한다. 지원 모델은
+         backend ID와 해당 backend가 요구하는 관리 ID token audience를 함께 선택한다. -->
+    <choose>
+%{ for model_name, backend_id in model_backend_ids ~}
+      <when condition='@((string)context.Variables["requestedModel"] == ${jsonencode(model_name)})'>
+        <set-variable name="backendId" value="${backend_id}" />
+        <set-variable name="backendAuthResource" value="${model_auth_resources[model_name]}" />
+      </when>
+%{ endfor ~}
+      <otherwise>
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>@(Newtonsoft.Json.JsonConvert.SerializeObject(new {
+              error = "model '" + (string)context.Variables["requestedModel"] + "' is not supported by this gateway"
+          }))</set-body>
+        </return-response>
+      </otherwise>
+    </choose>
+
+    <!-- 6. OpenAI 요청 형식 정규화
+         Chat Completions의 max_tokens를 max_completion_tokens로 변환한다. streaming Chat 요청에는
+         APIM token telemetry를 위해 include_usage를 강제하고, Responses 요청에서는 지원하지 않는
+         chat 전용 stream_options를 제거한다. -->
+    <set-body>@{
+        var body = context.Request.Body.As&lt;Newtonsoft.Json.Linq.JObject&gt;();
+        var operationId = context.Operation.Id;
+        var isStreaming = body["stream"] != null
+            &amp;&amp; body["stream"].Type == Newtonsoft.Json.Linq.JTokenType.Boolean
+            &amp;&amp; (bool)body["stream"];
+
+        if (operationId == "chat-completions") {
+            if (body["max_tokens"] != null) {
+                if (body["max_completion_tokens"] == null) {
+                    body["max_completion_tokens"] = body["max_tokens"];
+                }
+                body.Remove("max_tokens");
+            }
+
+            if (isStreaming) {
+                var options = body["stream_options"] as Newtonsoft.Json.Linq.JObject
+                    ?? new Newtonsoft.Json.Linq.JObject();
+                options["include_usage"] = true;
+                body["stream_options"] = options;
+            }
+        } else if (operationId == "responses") {
+            body.Remove("stream_options");
+        }
+
+        return body.ToString(Newtonsoft.Json.Formatting.None);
+    }</set-body>
+%{ if user_tokens_per_minute > 0 ~}
+
+    <!-- 7. 사용자·모델별 token rate limit
+         예산 제한이 아니라 runaway agent의 영향 범위를 줄이는 보호 장치다. 동일 사용자가 한 모델의
+         한도를 초과해도 다른 사용자와 다른 모델의 counter에는 영향을 주지 않는다.
+         estimate-prompt-tokens=false이면 비 streaming 요청은 backend가 반환한 실제 usage를 사용하고,
+         streaming 요청은 APIM 동작상 prompt/completion token을 추정한다. -->
+    <llm-token-limit counter-key='@((string)context.Variables["userId"] + ":" + (string)context.Variables["requestedModel"])'
+                     tokens-per-minute="${user_tokens_per_minute}"
+                     estimate-prompt-tokens="false"
+                     remaining-tokens-header-name="x-remaining-tokens"
+                     retry-after-header-name="Retry-After" />
+%{ endif ~}
+
+    <!-- 8. backend 선택 및 관리 ID 인증
+         APIM system-assigned managed identity로 backend audience에 맞는 Entra token을 발급받아
+         Authorization header를 교체한다. 클라이언트의 Keycloak token은 backend로 전달하지 않는다. -->
+    <set-backend-service backend-id='@((string)context.Variables["backendId"])' />
+    <authentication-managed-identity resource='@((string)context.Variables["backendAuthResource"])'
+                                     output-token-variable-name="msi-access-token"
+                                     ignore-error="false" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+    </set-header>
+  </inbound>
+
+  <backend>
+    <!-- 9. backend 요청 전달
+         streaming 응답을 buffering하지 않아 생성된 token을 coding agent에 즉시 전달한다. -->
+    <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
+  </backend>
+
+  <outbound>
+    <base />
+  </outbound>
+
+  <on-error>
+    <base />
+  </on-error>
+</policies>

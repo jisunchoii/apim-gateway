@@ -1,0 +1,130 @@
+# 새 배포의 resource name, tag, trace source를 결정한다. 배포 환경마다 명시적으로 설정한다.
+# 신규 환경은 첫 terraform init 전에 scripts/bootstrap-backend.sh를 실행해 Azure Blob remote
+# state를 생성한다. 기존 local-state 환경에는 migration 승인 없이 실행하지 않는다.
+prefix       = "llmgw"
+env          = "dev"
+trace_source = "llm-gateway"
+
+location    = "eastus2"
+owner       = "platform-team@example.com"
+cost_center = "cc-1234"
+
+apim_publisher_name  = "Platform Team"
+apim_publisher_email = "platform-team@example.com"
+
+# Premium은 classic tier 중 autoscale과 SLA를 지원하며 unit당 backend 동시 연결 한도가 2,048개다.
+# 이후 unit 증설은 서비스 중단 없이 적용할 수 있다.
+apim_sku = "Premium_1"
+
+# Keycloak 최종 사용자 인증 설정이다. APIM에서 아래 HTTPS discovery URL에 접근할 수 있어야 한다.
+oidc_provider = {
+  openid_config_url = "https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
+  audience          = "llm-gateway-api"
+  issuer            = "https://<keycloak-host>/realms/<realm>"
+  client_id         = "llm-gateway-cli"
+  client_scope      = "openid llm-gateway"
+  required_scope    = "llm-gateway"
+  scope_claim       = "scope"
+  role_claim        = "llm_gateway_roles"
+  required_role     = "invoke"
+  user_label_claim  = "llm_gateway_user"
+}
+
+# 사용자·모델별 TPM 상한이다. 0이면 제한 정책을 생성하지 않으며 이것이 기본값이다.
+# 예산 제한이 아니라 runaway agent 한 명이 모델 전체 TPM을 소진해 다른 사용자까지 429를 받는
+# 상황을 줄이는 보호 장치다. README의 사용자별 KQL에서 실제 p99를 확인한 뒤 정상 사용량보다
+# 충분히 높게 설정한다. 초기 참고값은 대략 (capacity * 1000) / 동시 사용자 수다.
+user_tokens_per_minute = 0
+
+# APIM에서 호출을 허용할 모델 목록이다. deployment 이름과 정확히 일치해야 한다.
+routed_models = [
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "FW-GLM-5.2",
+  "FW-Kimi-K3",
+]
+
+# OpenCode 기본 모델도 routed_models 안의 deployment 이름으로 지정한다.
+opencode_default_model = "gpt-5.6-sol"
+opencode_small_model   = "gpt-5.6-luna"
+
+# 거버넌스 Workbook의 선택적 비용 추정 단가다. 아래 값은 2026-08-04 공개 USD retail 단가다.
+# GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 일반 input/output 단가다.
+# Workbook은 cached input과 long-context를 구분하지 않으므로 실제 계약·사용 패턴에 맞게 교체한다.
+# Fireworks 모델은 Data Zone pay-per-token 단가이며 세금, 할인, 계약 단가는 반영하지 않는다.
+# Retail Prices API: https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices
+# Kimi K3: https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-kimi-k3-through-fireworks-ai-on-microsoft-foundry/4540187
+model_pricing_usd_per_million = {
+  "gpt-5.6-sol" = {
+    input  = 5.00
+    output = 30.00
+  }
+  "gpt-5.6-terra" = {
+    input  = 2.00
+    output = 12.00
+  }
+  "gpt-5.6-luna" = {
+    input  = 0.20
+    output = 1.20
+  }
+  "FW-GLM-5.2" = {
+    input  = 1.54
+    output = 4.84
+  }
+  "FW-Kimi-K3" = {
+    input  = 3.30
+    output = 16.50
+  }
+}
+
+# deployment 이름과 모델 이름을 같게 사용하므로 클라이언트는 실제 모델 ID를 전송한다.
+# GPT-5.6 family의 현재 모델 version은 2026-07-09다.
+# GlobalStandard의 capacity 단위는 1,000 TPM이므로 500은 모델별 500K TPM이다.
+# quota tier와 지역별 가용성은 subscription마다 다르므로 적용 전에 반드시 확인한다.
+#   az cognitiveservices usage list -l eastus2 -o table
+#   az cognitiveservices model list -l eastus2 --query "[?starts_with(model.name, 'gpt-5.6-')].{name:model.name, version:model.version, skus:model.skus[].name}" -o table
+model_deployments = {
+  "gpt-5.6-sol" = {
+    model_name             = "gpt-5.6-sol"
+    model_format           = "OpenAI"
+    model_version          = "2026-07-09"
+    version_upgrade_option = "NoAutoUpgrade"
+    sku_name               = "GlobalStandard"
+    capacity               = 500
+  }
+  "gpt-5.6-terra" = {
+    model_name             = "gpt-5.6-terra"
+    model_format           = "OpenAI"
+    model_version          = "2026-07-09"
+    version_upgrade_option = "NoAutoUpgrade"
+    sku_name               = "GlobalStandard"
+    capacity               = 500
+  }
+  "gpt-5.6-luna" = {
+    model_name             = "gpt-5.6-luna"
+    model_format           = "OpenAI"
+    model_version          = "2026-07-09"
+    version_upgrade_option = "NoAutoUpgrade"
+    sku_name               = "GlobalStandard"
+    capacity               = 500
+  }
+}
+
+# 기존 Foundry 프로젝트 endpoint로 노출된 Fireworks 모델 배포를 연결한다.
+# Terraform은 프로젝트 endpoint를 조회하고 APIM 관리 ID에 Foundry User 역할을 할당하지만,
+# 원본 모델 배포를 생성·수정·재생성하지 않는다. capacity_tpm은 실제 quota 설정이 아니라
+# Workbook의 사용률과 여유량 계산에 사용하는 기준값이므로 실제 배포 TPM과 동일하게 입력한다.
+# 아래 map key는 해당 프로젝트에 이미 존재하는 deployment 이름과 정확히 일치해야 한다.
+# 기존 Foundry 프로젝트의 ARM resource ID 조회:
+#   az cognitiveservices account project show --name <foundry-resource-name> --project-name <project-name> --resource-group <resource-group-name> --query id -o tsv
+project_model_deployments = {
+  "FW-GLM-5.2" = {
+    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
+    capacity_tpm        = 200000
+  }
+  "FW-Kimi-K3" = {
+    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
+    capacity_tpm        = 300000
+  }
+}
