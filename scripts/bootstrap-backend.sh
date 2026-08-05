@@ -130,7 +130,7 @@ sa_id=$(az storage account show --name "$sa" --resource-group "$rg" --query id -
 az tag update --resource-id "$sa_id" --operation Merge --tags "${tags[@]}" --output none
 
 az storage account blob-service-properties update \
-  --name "$sa" \
+  --account-name "$sa" \
   --resource-group "$rg" \
   --enable-versioning true \
   --enable-delete-retention true \
