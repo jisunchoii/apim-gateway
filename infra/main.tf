@@ -134,6 +134,11 @@ resource "azurerm_monitor_diagnostic_setting" "apim" {
   enabled_metric {
     category = "AllMetrics"
   }
+
+  # GatewayLlmLogs를 활성화하면 APIM이 이 logger를 참조하는 service-level
+  # azuremonitor diagnostic을 구성한다. 명시적 의존성으로 destroy 시 diagnostic
+  # setting이 logger보다 먼저 제거되게 한다.
+  depends_on = [azapi_resource.azure_monitor_logger]
 }
 
 # 모델마다 APIM backend를 하나씩 생성하여 circuit breaker 상태를 모델별로 분리한다.
