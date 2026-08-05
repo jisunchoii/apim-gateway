@@ -20,6 +20,39 @@ const responsesProviderId = "openai"
 const projectProviderId = "foundry"
 const gatewayProviderIds = new Set([responsesProviderId, projectProviderId])
 
+const mergeModelDefinition = (defaults, configured = {}) => {
+  const definition = {
+    ...defaults,
+    ...configured,
+  }
+  if (defaults.options || configured.options) {
+    definition.options = {
+      ...defaults.options,
+      ...configured.options,
+    }
+  }
+  if (defaults.variants || configured.variants) {
+    definition.variants = {
+      ...defaults.variants,
+      ...configured.variants,
+    }
+  }
+  return definition
+}
+
+const responsesModelDefinition = (model) => ({
+  name: model,
+  tool_call: true,
+  options: {
+    systemMessageMode: "system",
+    reasoningEffort: "high",
+    reasoningSummary: "auto",
+    textVerbosity: "low",
+    store: true,
+    include: ["reasoning.encrypted_content"],
+  },
+})
+
 const hardenTokenFile = async (path) => {
   if (process.platform === "win32") {
     const identity = execFileSync("whoami", [], {
@@ -159,8 +192,17 @@ export const KeycloakGateway = async () => {
     }
     return preferredReference || qualifyModel(configured) || fallback
   }
-  const toModelDefinitions = (models) =>
-    Object.fromEntries(models.map((model) => [model, { name: model }]))
+  const toModelDefinitions = (
+    models,
+    configuredModels = {},
+    createDefaults = (model) => ({ name: model }),
+  ) =>
+    Object.fromEntries(
+      models.map((model) => [
+        model,
+        mergeModelDefinition(createDefaults(model), configuredModels[model]),
+      ]),
+    )
 
   const baseURL = (
     await readSetting("LLMGW_BASE_URL", "gateway_base_url")
@@ -245,7 +287,11 @@ export const KeycloakGateway = async () => {
           },
           models: {
             ...currentResponsesProvider.models,
-            ...toModelDefinitions(responsesModels),
+            ...toModelDefinitions(
+              responsesModels,
+              currentResponsesProvider.models,
+              responsesModelDefinition,
+            ),
           },
         },
         [projectProviderId]: {
@@ -261,7 +307,10 @@ export const KeycloakGateway = async () => {
           },
           models: {
             ...currentProjectProvider.models,
-            ...toModelDefinitions(projectModels),
+            ...toModelDefinitions(
+              projectModels,
+              currentProjectProvider.models,
+            ),
           },
         },
       }

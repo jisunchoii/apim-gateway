@@ -96,7 +96,8 @@ APIM은 token의 서명, issuer, audience와 `scope=llm-gateway`를 검증한 �
 
 `POST /chat/completions`는 legacy `max_tokens`를 `max_completion_tokens`로 변환하고 streaming
 사용량 집계를 활성화합니다. `POST /responses`는 Responses 형식을 유지하며 backend가 받지 않는
-Chat 전용 `stream_options`를 제거합니다.
+Chat 전용 `stream_options`를 제거합니다. 또한 OpenCode가 role 기반 `input` item의 `type`을
+누락하거나 빈 문자열로 보내면 Foundry Responses 형식에 맞게 `type: "message"`를 채웁니다.
 
 ## Coding agent 설정
 
@@ -130,6 +131,11 @@ export LLMGW_OPENCODE_SMALL_MODEL="gpt-5.6-luna"
 단발성 호출은 `openai/<model>` 또는 `foundry/<model>` 형식을 사용합니다. provider는 모델을
 어디서 생성했는지가 아니라 각 deployment의 `opencode_api` 값으로 결정됩니다.
 `responses`는 `openai`, `chat`은 `foundry` provider에 배치됩니다.
+Responses 모델에는 tool calling, system message, high reasoning, reasoning summary,
+low text verbosity, encrypted reasoning content와 Responses server-side state 저장이 기본
+적용됩니다. 저장을 활성화하면 OpenCode의 tool 후속 요청이 reasoning 객체를 다시 직렬화하지
+않고 Foundry `item_reference`를 사용하므로 agent loop가 유지됩니다. `opencode.json`의 동일
+모델 설정은 Hook이 보존하며 기본값보다 우선합니다.
 
 ```bash
 opencode run --model openai/gpt-5.6-sol "Reply with exactly: OK"

@@ -155,6 +155,23 @@
             }
         } else if (operationId == "responses") {
             body.Remove("stream_options");
+
+            // OpenCode can omit type, or serialize it as an empty string, on role-based
+            // Responses input items. Foundry requires these items to be explicit messages.
+            var input = body["input"] as Newtonsoft.Json.Linq.JArray;
+            if (input != null) {
+                foreach (var item in input) {
+                    var inputItem = item as Newtonsoft.Json.Linq.JObject;
+                    var itemType = inputItem?["type"]?.Type == Newtonsoft.Json.Linq.JTokenType.String
+                        ? (string)inputItem["type"]
+                        : null;
+                    if (inputItem != null
+                        &amp;&amp; string.IsNullOrWhiteSpace(itemType)
+                        &amp;&amp; inputItem["role"] != null) {
+                        inputItem["type"] = "message";
+                    }
+                }
+            }
         }
 
         return body.ToString(Newtonsoft.Json.Formatting.None);
