@@ -1,9 +1,9 @@
 # LLM Gateway 사용 안내
 
-이 Gateway는 회사에서 승인한 Microsoft Foundry 모델을 OpenAI 호환 API로 제공합니다. 고객은
+이 Gateway는 회사에서 승인한 Microsoft Foundry 모델을 OpenAI 호환 API로 제공합니다. 최종 사용자는
 Keycloak Device Authorization Grant로 로그인하고 Azure API Management(APIM)에 bearer token을
-보냅니다. APIM은 Managed Identity와 Azure RBAC로 Foundry backend를 호출합니다. API key와 APIM
-subscription key는 사용하지 않습니다.
+보냅니다. 서비스 계정은 별도 API에 APIM subscription key를 보냅니다. 두 API 모두 APIM Managed
+Identity와 Azure RBAC로 Foundry backend를 호출합니다.
 
 ## 접속 정보
 
@@ -12,6 +12,12 @@ Gateway base URL은 운영자가 안내하며, 운영자는 Terraform output `ga
 
 ```text
 https://<apim-name>.azure-api.net/openai/v1
+```
+
+서비스 계정용 base URL은 Terraform output `service_gateway_base_url`에서 확인합니다.
+
+```text
+https://<apim-name>.azure-api.net/service/openai/v1
 ```
 
 Keycloak 연결에는 다음 값이 필요합니다.
@@ -70,6 +76,29 @@ curl --silent --show-error \
   --data "{\"model\":\"$LLMGW_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"max_completion_tokens\":32}"
 ```
 
+### 서비스 계정 연결
+
+서비스 계정은 `Service Model Gateway` API 범위로 발급된 고유 subscription key를 사용합니다.
+Keycloak token은 보내지 않으며, 키는 `Ocp-Apim-Subscription-Key` header로 전달합니다.
+
+```bash
+export LLMGW_SERVICE_BASE_URL="https://<apim-name>.azure-api.net/service/openai/v1"
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+
+curl --silent --show-error \
+  --request POST \
+  --url "$LLMGW_SERVICE_BASE_URL/responses" \
+  --header "Ocp-Apim-Subscription-Key: $LLMGW_SUBSCRIPTION_KEY" \
+  --header "Content-Type: application/json" \
+  --data "{\"model\":\"$LLMGW_MODEL\",\"input\":\"Reply with exactly: OK\",\"max_output_tokens\":32}"
+```
+
+서비스마다 subscription을 하나씩 발급하고 공유하지 않습니다. CI에서는 GitHub Actions의
+repository 또는 environment secret에 `LLMGW_SUBSCRIPTION_KEY`로 저장하고, Azure 워크로드에서는
+[Azure Key Vault](https://learn.microsoft.com/azure/key-vault/general/overview)에 저장한 뒤
+실행 시 환경변수로 주입합니다. 로컬에서도 회사가 승인한 비밀 저장소에서 환경변수로 주입하며,
+키를 source, `.env`, 클라이언트 설정 파일, 명령 기록에 직접 저장하지 않습니다.
+
 ## 지원 API
 
 Gateway base URL에는 이미 `/openai/v1`이 포함되어 있습니다.
@@ -90,9 +119,10 @@ Gateway base URL에는 이미 `/openai/v1`이 포함되어 있습니다.
 
 ### 공통 요청 규칙
 
-두 API 모두 bearer token, `Content-Type: application/json`, 정확한 `model` 이름이 필요합니다.
-APIM은 token의 서명, issuer, audience와 `scope=llm-gateway`를 검증한 뒤 `routed_models`에
-해당하는 Foundry backend를 선택하고 Managed Identity로 요청을 전달합니다.
+최종 사용자 API는 Keycloak bearer token, 서비스 계정 API는
+`Ocp-Apim-Subscription-Key` header가 필요합니다. 두 API 모두
+`Content-Type: application/json`과 정확한 `model` 이름을 사용합니다. APIM은 인증 후
+`routed_models`에 해당하는 Foundry backend를 선택하고 Managed Identity로 요청을 전달합니다.
 
 `POST /chat/completions`는 legacy `max_tokens`를 `max_completion_tokens`로 변환하고 streaming
 사용량 집계를 활성화합니다. `POST /responses`는 Responses 형식을 유지하며 backend가 받지 않는
@@ -102,6 +132,8 @@ Chat 전용 `stream_options`를 제거합니다. 또한 OpenCode가 role 기반 
 ## Coding agent 설정
 
 ### OpenCode
+
+#### 사용자 OIDC
 
 `opencode.json`은 `scripts/keycloak/opencode-keycloak-hook.js`를 로드합니다. Hook은 최초에만
 Device Flow로 로그인하고 access/refresh token을 사용자 프로필의 `~/.llmgw/keycloak-token.json`에
@@ -145,7 +177,91 @@ opencode run --model foundry/FW-GLM-5.2 "Reply with exactly: OK"
 Responses stream과 호환되지 않는 모델은 `opencode_api = "chat"`으로 설정합니다. GPT 계열을
 Chat으로 호출하도록 설정한 경우 Hook은 지원되지 않는 Responses 전용 reasoning 옵션을 제거합니다.
 
+#### 서비스 계정
+
+서비스 계정은 Keycloak hook을 사용하지 않습니다. 고객 프로젝트의 `opencode.json`에 서비스용
+provider를 직접 설정하고, 운영자가 안내한 Responses 모델과 Chat 모델만 등록합니다.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "llmgw-responses/<responses-model>",
+  "small_model": "llmgw-responses/<responses-model>",
+  "provider": {
+    "llmgw-responses": {
+      "npm": "@ai-sdk/openai",
+      "name": "LLM Gateway Responses",
+      "options": {
+        "baseURL": "https://<apim-name>.azure-api.net/service/openai/v1",
+        "apiKey": "unused",
+        "headers": {
+          "Ocp-Apim-Subscription-Key": "{env:LLMGW_SUBSCRIPTION_KEY}"
+        },
+        "timeout": 300000
+      },
+      "models": {
+        "<responses-model>": {
+          "name": "<responses-model>",
+          "tool_call": true,
+          "options": {
+            "systemMessageMode": "system",
+            "reasoningEffort": "high",
+            "reasoningSummary": "auto",
+            "textVerbosity": "low",
+            "store": true,
+            "include": ["reasoning.encrypted_content"]
+          }
+        }
+      }
+    },
+    "llmgw-chat": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LLM Gateway Chat",
+      "options": {
+        "baseURL": "https://<apim-name>.azure-api.net/service/openai/v1",
+        "apiKey": "unused",
+        "headers": {
+          "Ocp-Apim-Subscription-Key": "{env:LLMGW_SUBSCRIPTION_KEY}"
+        },
+        "timeout": 300000
+      },
+      "models": {
+        "<chat-model>": {
+          "name": "<chat-model>"
+        }
+      }
+    }
+  }
+}
+```
+
+`apiKey`의 `unused` 값은 OpenCode provider SDK 초기화용이며 인증 정보가 아닙니다. 실제 인증은
+환경 변수에서 읽은 APIM subscription header로 수행됩니다.
+
+`<responses-model>`과 `<chat-model>`은 운영자가 안내한 실제 모델 이름으로 모두 교체합니다.
+구독 키와 실행할 모델을 환경 변수로 설정한 뒤 provider를 선택합니다.
+
+```bash
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+export LLMGW_RESPONSES_MODEL="<responses-model>"
+export LLMGW_CHAT_MODEL="<chat-model>"
+
+opencode --model "llmgw-responses/$LLMGW_RESPONSES_MODEL"
+opencode run --model "llmgw-chat/$LLMGW_CHAT_MODEL" "Reply with exactly: OK"
+```
+
+현재 저장소처럼 project `opencode.json`이 OIDC plugin을 로드하는 환경에서 서비스 계정 설정을
+별도 파일로 사용하는 경우에는 `OPENCODE_CONFIG`로 파일을 지정하고 `--pure`를 함께 사용하여
+OIDC plugin을 비활성화합니다.
+
+```bash
+export OPENCODE_CONFIG="/path/to/service-opencode.json"
+opencode run --pure --model "llmgw-responses/$LLMGW_RESPONSES_MODEL" "Review the current change"
+```
+
 ### Codex CLI
+
+#### 사용자 OIDC
 
 Codex에는 static API key 대신 Keycloak token helper를 command credential로 연결합니다. 아래
 경로는 저장소의 실제 절대 경로로 변경합니다.
@@ -170,15 +286,51 @@ refresh_interval_ms = 240000
 token은 OpenCode hook과 같은 사용자 프로필의 `~/.llmgw/keycloak-token.json`에 저장되며 소스 코드나
 `.env`에는 저장하지 않습니다.
 
+#### 서비스 계정
+
+Codex는 Responses API만 사용합니다. 사용자 OIDC 설정과 함께 사용하는 PC에서는
+`~/.codex/service-account.config.toml`을 별도 profile로 생성합니다.
+
+```toml
+model_provider = "llmgw_service"
+model = "<responses-model>"
+
+[model_providers.llmgw_service]
+name = "LLM Gateway Service"
+base_url = "https://<apim-name>.azure-api.net/service/openai/v1"
+wire_api = "responses"
+requires_openai_auth = false
+
+[model_providers.llmgw_service.env_http_headers]
+"Ocp-Apim-Subscription-Key" = "LLMGW_SUBSCRIPTION_KEY"
+
+[shell_environment_policy]
+inherit = "core"
+ignore_default_excludes = false
+
+[shell_environment_policy.filters]
+"LLMGW_SUBSCRIPTION_KEY" = "exclude"
+```
+
+구독 키를 환경 변수로 설정하고 service profile을 선택합니다. `OPENAI_API_KEY`나 Keycloak
+token은 설정하지 않습니다.
+
+```bash
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+
+codex --profile service-account
+codex exec --profile service-account "Review the current change"
+```
+
 Node helper는 Node.js 20 이상을 지원합니다. 커밋 대상 helper의 구문 검사는 `npm run check`로
-실행합니다. 로컬 테스트 파일과 smoke script는 저장소 배포물에 포함하지 않습니다.
+실행합니다.
 
 ## 오류 대응
 
 | 상태 | 의미 | 고객 조치 |
 |---|---|---|
 | `400` | 잘못된 JSON 또는 `model` 누락 | request body와 모델 이름을 확인합니다. |
-| `401` | token 누락·만료, 잘못된 issuer·audience·scope | token helper를 다시 실행하고 Keycloak 설정을 확인합니다. |
+| `401` | 사용자 token 또는 서비스 subscription key 누락·오류 | 사용자는 token helper, 서비스는 subscription key 설정을 확인합니다. |
 | `403` | Gateway에 라우팅되지 않은 모델 | 현재 지원 모델을 운영자에게 확인합니다. |
 | `404` | 등록되지 않은 API 경로 | `/responses` 또는 `/chat/completions`를 사용합니다. |
 | `429` | 사용자 제한 또는 backend TPM/RPM 제한 | `Retry-After`를 따르고 exponential backoff를 적용합니다. |
@@ -191,6 +343,7 @@ Prompt, access token, refresh token과 고객 데이터는 지원 요청에 첨�
 ## 보안과 사용량 기록
 
 - 고객 인증은 Keycloak OIDC Device Authorization Grant로 수행합니다.
+- 서비스 계정 인증은 별도 API의 APIM API-scoped subscription으로 수행합니다.
 - APIM에서 Foundry로의 인증은 Managed Identity와 Azure RBAC를 사용합니다.
 - APIM은 Keycloak의 `iss:sub`를 SHA-256으로 해시하여 사용자별 사용량을 집계합니다.
 - Workbook 표시용 Keycloak username은 `userLabel`로 Azure Monitor trace에 저장됩니다.
@@ -204,6 +357,9 @@ Terraform 배포, 모델 관리, Workbook과 로그 쿼리는
 
 - [Keycloak Device Authorization Grant](https://www.keycloak.org/docs/latest/server_admin/#_oid4vc_device_authorization_grant)
 - [Azure API Management validate-jwt 정책](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)
+- [Azure API Management subscriptions](https://learn.microsoft.com/azure/api-management/api-management-subscriptions)
 - [APIM Managed Identity 인증 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)
 - [Azure OpenAI Responses API](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/responses)
 - [Azure OpenAI Chat Completions](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/chatgpt)
+- [Codex custom model providers](https://developers.openai.com/codex/config-advanced/#custom-model-providers)
+- [OpenCode provider 설정](https://opencode.ai/docs/providers/)

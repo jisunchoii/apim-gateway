@@ -99,4 +99,19 @@ locals {
 
   # Identifies our trace records in TraceRecords[].source when querying.
   trace_source = var.trace_source
+
+  gateway_policy_parameters = {
+    oidc_openid_config_url = var.oidc_provider.openid_config_url
+    oidc_audience          = var.oidc_provider.audience
+    oidc_issuer            = var.oidc_provider.issuer
+    oidc_required_scope    = var.oidc_provider.required_scope
+    oidc_scope_claim       = var.oidc_provider.scope_claim
+    oidc_role_claim        = var.oidc_provider.role_claim
+    oidc_required_role     = var.oidc_provider.required_role
+    oidc_user_label_claim  = var.oidc_provider.user_label_claim
+    user_tokens_per_minute = var.user_tokens_per_minute
+    model_backend_ids      = local.routed_model_backend_ids
+    model_auth_resources   = local.routed_model_auth_resources
+    trace_source           = local.trace_source
+  }
 }

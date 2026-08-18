@@ -21,23 +21,23 @@ OpenAI 호환 LLM 게이트웨이입니다.
 
 | 관심사 | 구현 | 변경 방법 |
 |---|---|---|
-| 인증 | `validate-jwt` — 구독 키 자체가 없음 | tfvars `oidc_provider` |
+| 인증 | 최종 사용자 `validate-jwt`, 서비스 계정 API-scoped subscription | tfvars `oidc_provider` / APIM subscription |
 | 인가 | `required-claims`로 Keycloak `scope`와 client role 검증 | tfvars `required_scope`, `required_role` / realm 사용자 관리 |
 | 모델 라우팅 | `routed_models`별 backend 선택, 미지원 모델 403 | Terraform |
 | 사용량·비용 | resource log 2개 테이블 조인 + Workbook | Terraform / Azure Monitor |
 | 백엔드 보호 | 모델별 backend circuit breaker (429) | `main.tf` |
 
-APIM은 discovery document의 서명 키와 issuer, `aud=llm-gateway-api`,
+최종 사용자 API에서 APIM은 discovery document의 서명 키와 issuer, `aud=llm-gateway-api`,
 `scope=llm-gateway`, `llm_gateway_roles=invoke`를 모두 확인합니다. Keycloak realm에는 Gateway
 사용이 승인된 사용자 또는 그룹에 `llm-gateway-api/invoke` client role을 할당해야 합니다.
-Terminal client는 public client이며 Device Authorization Grant만 사용하고 client secret,
-password grant, service account를 사용하지 않습니다.
+Terminal client는 public client이며 Device Authorization Grant만 사용합니다. 서비스 API는
+Keycloak을 거치지 않고 APIM이 API 범위 subscription key를 검증합니다.
 
 ### APIM policy 처리 순서
 
-1. Keycloak JWT의 서명, issuer, audience, scope, role을 검증합니다.
+1. 최종 사용자 API는 Keycloak JWT를 검증하고, 서비스 API는 APIM subscription을 검증합니다.
 2. 클라이언트가 전달한 API key와 APIM 구독 키를 제거합니다.
-3. `iss:sub` 기반 가명 사용자 ID, 표시용 username과 요청 모델을 trace에 기록합니다.
+3. 사용자 `iss:sub` 또는 서비스 subscription ID 기반 가명 ID와 표시 label을 trace에 기록합니다.
 4. JSON 본문과 `model` 필드를 검증하고 지원하지 않는 모델은 `403`으로 종료합니다.
 5. Chat Completions와 Responses 요청 형식을 Foundry backend에 맞게 정규화합니다.
 6. 설정된 경우 사용자·모델별 token rate limit을 적용합니다.
@@ -96,6 +96,44 @@ state 초기화가 끝난 후 배포합니다.
 terraform -chdir=infra plan
 terraform -chdir=infra apply
 ```
+
+배포 후 base URL은 인증 방식별로 분리됩니다.
+
+```bash
+terraform -chdir=infra output -raw gateway_base_url
+terraform -chdir=infra output -raw service_gateway_base_url
+```
+
+### 서비스 계정 subscription
+
+서비스마다 `service-model-gateway` API 범위의 standalone subscription을 하나씩 생성합니다.
+Terraform은 subscription key를 state에 저장하지 않도록 API까지만 관리합니다.
+
+Azure Portal에서 **API Management → Subscriptions → Add subscription**을 선택하고 다음처럼
+생성합니다.
+
+| 항목 | 값 |
+|---|---|
+| Name / Display name | 서비스 식별자 |
+| Scope | API → `Service Model Gateway` |
+| User | 비워서 standalone subscription으로 생성 |
+
+서비스에는 primary 또는 secondary key 하나만 전달합니다. GitHub Actions에서는 repository 또는
+environment secret에 `LLMGW_SUBSCRIPTION_KEY`로 저장하고, Azure 워크로드에서는
+[Azure Key Vault](https://learn.microsoft.com/azure/key-vault/general/overview)에 저장한 뒤
+실행 시 환경변수로 주입합니다. 요청은 `Ocp-Apim-Subscription-Key` header를 사용하며 Keycloak
+bearer token은 필요하지 않습니다. 서비스별 사용량과 제한 counter는 subscription ID 기준으로
+분리되고 Workbook에는 subscription 이름이 사용자 label로 표시됩니다.
+
+키 회전은 secondary key를 재생성해 서비스에 배포하고 전환을 확인한 뒤 primary key를
+재생성하는 순서로 수행합니다. built-in all-access subscription과 여러 서비스가 공유하는
+subscription은 사용하지 않습니다.
+
+관련 공식 문서:
+[APIM subscriptions](https://learn.microsoft.com/azure/api-management/api-management-subscriptions),
+[subscription 생성](https://learn.microsoft.com/azure/api-management/api-management-howto-create-subscriptions),
+[primary key 재생성](https://learn.microsoft.com/rest/api/apimanagement/subscription/regenerate-primary-key),
+[secondary key 재생성](https://learn.microsoft.com/rest/api/apimanagement/subscription/regenerate-secondary-key).
 
 ### 모델 관리
 
