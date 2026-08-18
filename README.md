@@ -80,9 +80,11 @@ curl --silent --show-error \
 
 서비스 계정은 `Service Model Gateway` API 범위로 발급된 고유 subscription key를 사용합니다.
 Keycloak token은 보내지 않으며, 키는 `Ocp-Apim-Subscription-Key` header로 전달합니다.
+Terraform 배포 환경에서는 주소를 직접 조합하지 않고 `service_gateway_base_url` output을 사용합니다.
+Terraform state에 접근할 수 없는 서비스 운영자는 APIM 운영자에게 이 output 값을 전달받습니다.
 
 ```bash
-export LLMGW_SERVICE_BASE_URL="https://<apim-name>.azure-api.net/service/openai/v1"
+export LLMGW_SERVICE_BASE_URL="$(terraform -chdir=infra output -raw service_gateway_base_url)"
 export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
 
 curl --silent --show-error \
