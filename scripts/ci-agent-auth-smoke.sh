@@ -64,16 +64,11 @@ ignore_default_excludes = false
 "LLMGW_SUBSCRIPTION_KEY" = "exclude"
 EOF
 
-  codex_sandbox_args=(--sandbox workspace-write)
-  if [[ "${OS:-}" == "Windows_NT" ]]; then
-    codex_sandbox_args=(--dangerously-bypass-approvals-and-sandbox)
-  fi
-
   CODEX_HOME="$codex_home" codex exec \
     --strict-config \
     --ephemeral \
     -C "$codex_repo" \
-    "${codex_sandbox_args[@]}" \
+    --dangerously-bypass-approvals-and-sandbox \
     "Edit result.txt so its entire contents are exactly CODEX_CI_OK followed by one newline. Do not modify any other file."
 
   if [[ "$(cat "$codex_repo/result.txt")" != "CODEX_CI_OK" ]]; then
