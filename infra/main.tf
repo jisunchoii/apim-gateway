@@ -189,6 +189,19 @@ resource "azurerm_api_management_api" "gateway" {
   subscription_required = false
 }
 
+resource "azurerm_api_management_api" "service_gateway" {
+  name                = "service-model-gateway"
+  resource_group_name = azurerm_resource_group.rg.name
+  api_management_name = azurerm_api_management.apim.name
+  revision            = "1"
+  display_name        = "Service Model Gateway"
+  path                = "service/openai/v1"
+  protocols           = ["https"]
+
+  # APIM이 policy 실행 전에 API 범위 subscription key를 검증한다. Keycloak JWT는 요구하지 않는다.
+  subscription_required = true
+}
+
 resource "azapi_resource" "azure_monitor_logger" {
   type      = "Microsoft.ApiManagement/service/loggers@2025-09-01-preview"
   name      = "azuremonitor"
@@ -230,6 +243,30 @@ resource "azapi_resource" "gateway_diagnostic" {
   depends_on = [azurerm_monitor_diagnostic_setting.apim]
 }
 
+resource "azapi_resource" "service_gateway_diagnostic" {
+  type      = "Microsoft.ApiManagement/service/apis/diagnostics@2025-09-01-preview"
+  name      = "azuremonitor"
+  parent_id = azurerm_api_management_api.service_gateway.id
+
+  body = {
+    properties = {
+      loggerId    = azapi_resource.azure_monitor_logger.id
+      alwaysLog   = "allErrors"
+      logClientIp = false
+      verbosity   = "information"
+      sampling = {
+        samplingType = "fixed"
+        percentage   = 100
+      }
+      largeLanguageModel = {
+        logs = "enabled"
+      }
+    }
+  }
+
+  depends_on = [azurerm_monitor_diagnostic_setting.apim]
+}
+
 resource "azurerm_api_management_api_operation" "chat_completions" {
   operation_id        = "chat-completions"
   api_name            = azurerm_api_management_api.gateway.name
@@ -250,25 +287,35 @@ resource "azurerm_api_management_api_operation" "responses" {
   url_template        = "/responses"
 }
 
+resource "azurerm_api_management_api_operation" "service_chat_completions" {
+  operation_id        = "chat-completions"
+  api_name            = azurerm_api_management_api.service_gateway.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = azurerm_resource_group.rg.name
+  display_name        = "Chat Completions"
+  method              = "POST"
+  url_template        = "/chat/completions"
+}
+
+resource "azurerm_api_management_api_operation" "service_responses" {
+  operation_id        = "responses"
+  api_name            = azurerm_api_management_api.service_gateway.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = azurerm_resource_group.rg.name
+  display_name        = "Responses"
+  method              = "POST"
+  url_template        = "/responses"
+}
+
 resource "azurerm_api_management_api_policy" "gateway" {
   api_name            = azurerm_api_management_api.gateway.name
   api_management_name = azurerm_api_management.apim.name
   resource_group_name = azurerm_resource_group.rg.name
 
-  xml_content = templatefile("${path.module}/../policies/gateway.xml.tftpl", {
-    oidc_openid_config_url = var.oidc_provider.openid_config_url
-    oidc_audience          = var.oidc_provider.audience
-    oidc_issuer            = var.oidc_provider.issuer
-    oidc_required_scope    = var.oidc_provider.required_scope
-    oidc_scope_claim       = var.oidc_provider.scope_claim
-    oidc_role_claim        = var.oidc_provider.role_claim
-    oidc_required_role     = var.oidc_provider.required_role
-    oidc_user_label_claim  = var.oidc_provider.user_label_claim
-    user_tokens_per_minute = var.user_tokens_per_minute
-    model_backend_ids      = local.routed_model_backend_ids
-    model_auth_resources   = local.routed_model_auth_resources
-    trace_source           = local.trace_source
-  })
+  xml_content = templatefile(
+    "${path.module}/../policies/gateway.xml.tftpl",
+    merge(local.gateway_policy_parameters, { authentication_mode = "oidc" })
+  )
 
   lifecycle {
     precondition {
@@ -302,5 +349,24 @@ resource "azurerm_api_management_api_policy" "gateway" {
     azurerm_role_assignment.apim_to_external_foundry_project,
     azurerm_api_management_api_operation.chat_completions,
     azurerm_api_management_api_operation.responses,
+  ]
+}
+
+resource "azurerm_api_management_api_policy" "service_gateway" {
+  api_name            = azurerm_api_management_api.service_gateway.name
+  api_management_name = azurerm_api_management.apim.name
+  resource_group_name = azurerm_resource_group.rg.name
+
+  xml_content = templatefile(
+    "${path.module}/../policies/gateway.xml.tftpl",
+    merge(local.gateway_policy_parameters, { authentication_mode = "subscription" })
+  )
+
+  depends_on = [
+    azurerm_api_management_backend.model,
+    azurerm_role_assignment.apim_to_foundry,
+    azurerm_role_assignment.apim_to_external_foundry_project,
+    azurerm_api_management_api_operation.service_chat_completions,
+    azurerm_api_management_api_operation.service_responses,
   ]
 }

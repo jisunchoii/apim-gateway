@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto"
-import { execFileSync } from "node:child_process"
 import {
-  chmod,
   mkdir,
   readFile,
   rename,
@@ -15,6 +13,7 @@ import {
   readOpenCodeModelConfig,
   readTerraformStringOutput,
 } from "./terraform-settings.js"
+import { hardenTokenFile } from "./token-file-permissions.js"
 
 const responsesProviderId = "openai"
 const projectProviderId = "foundry"
@@ -52,23 +51,6 @@ const responsesModelDefinition = (model) => ({
     include: ["reasoning.encrypted_content"],
   },
 })
-
-const hardenTokenFile = async (path) => {
-  if (process.platform === "win32") {
-    const identity = execFileSync("whoami", [], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim()
-    execFileSync(
-      "icacls",
-      [path, "/inheritance:r", "/grant:r", `${identity}:(F)`],
-      { stdio: "ignore" },
-    )
-    return
-  }
-
-  await chmod(path, 0o600)
-}
 
 export const KeycloakGateway = async () => {
   const readSetting = async (environmentName, terraformOutput, defaultValue = "") => {

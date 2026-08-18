@@ -56,7 +56,7 @@ locals {
     );
     let Gateway = materialize(
         GatewayAll
-        | where ApiId == "model-gateway"
+        | where ApiId in ("model-gateway", "service-model-gateway")
         | where OperationId in ("chat-completions", "responses")
     );
     let Tokens = materialize(

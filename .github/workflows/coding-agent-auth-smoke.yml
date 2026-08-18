@@ -1,0 +1,43 @@
+name: Coding agent authentication smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent-ci-smoke
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coding-agent-auth-smoke
+  cancel-in-progress: false
+
+jobs:
+  coding-agent-auth-smoke:
+    runs-on: ubuntu-latest
+    environment: agent-ci-smoke
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out test scripts
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install coding agents
+        run: npm install --global @openai/codex@0.147.0 @opencode-ai/cli@1.18.16
+
+      - name: Run service-authenticated coding tests
+        env:
+          LLMGW_SERVICE_BASE_URL: ${{ vars.LLMGW_SERVICE_BASE_URL }}
+          LLMGW_SUBSCRIPTION_KEY: ${{ secrets.LLMGW_SUBSCRIPTION_KEY }}
+          LLMGW_CI_CODEX_MODEL: ${{ vars.LLMGW_CI_CODEX_MODEL }}
+          LLMGW_CI_OPENCODE_RESPONSES_MODEL: ${{ vars.LLMGW_CI_OPENCODE_RESPONSES_MODEL }}
+          LLMGW_CI_CHAT_MODEL: ${{ vars.LLMGW_CI_CHAT_MODEL }}
+        run: bash scripts/ci-agent-auth-smoke.sh

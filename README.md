@@ -1,9 +1,9 @@
 # LLM Gateway 사용 안내
 
-이 Gateway는 회사에서 승인한 Microsoft Foundry 모델을 OpenAI 호환 API로 제공합니다. 고객은
+이 Gateway는 회사에서 승인한 Microsoft Foundry 모델을 OpenAI 호환 API로 제공합니다. 최종 사용자는
 Keycloak Device Authorization Grant로 로그인하고 Azure API Management(APIM)에 bearer token을
-보냅니다. APIM은 Managed Identity와 Azure RBAC로 Foundry backend를 호출합니다. API key와 APIM
-subscription key는 사용하지 않습니다.
+보냅니다. 서비스 계정은 별도 API에 APIM subscription key를 보냅니다. 두 API 모두 APIM Managed
+Identity와 Azure RBAC로 Foundry backend를 호출합니다.
 
 ## 접속 정보
 
@@ -12,6 +12,12 @@ Gateway base URL은 운영자가 안내하며, 운영자는 Terraform output `ga
 
 ```text
 https://<apim-name>.azure-api.net/openai/v1
+```
+
+서비스 계정용 base URL은 Terraform output `service_gateway_base_url`에서 확인합니다.
+
+```text
+https://<apim-name>.azure-api.net/service/openai/v1
 ```
 
 Keycloak 연결에는 다음 값이 필요합니다.
@@ -69,6 +75,26 @@ curl --silent --show-error \
   --header "Content-Type: application/json" \
   --data "{\"model\":\"$LLMGW_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"max_completion_tokens\":32}"
 ```
+
+### 서비스 계정 연결
+
+서비스 계정은 `Service Model Gateway` API 범위로 발급된 고유 subscription key를 사용합니다.
+Keycloak token은 보내지 않으며, 키는 `Ocp-Apim-Subscription-Key` header로 전달합니다.
+
+```bash
+export LLMGW_SERVICE_BASE_URL="https://<apim-name>.azure-api.net/service/openai/v1"
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+
+curl --silent --show-error \
+  --request POST \
+  --url "$LLMGW_SERVICE_BASE_URL/responses" \
+  --header "Ocp-Apim-Subscription-Key: $LLMGW_SUBSCRIPTION_KEY" \
+  --header "Content-Type: application/json" \
+  --data "{\"model\":\"$LLMGW_MODEL\",\"input\":\"Reply with exactly: OK\",\"max_output_tokens\":32}"
+```
+
+서비스마다 subscription을 하나씩 발급하고 공유하지 않습니다. 키는 secret manager에 저장하며
+source, `.env`, 명령 기록에 남기지 않습니다.
 
 ## 지원 API
 
@@ -191,6 +217,7 @@ Prompt, access token, refresh token과 고객 데이터는 지원 요청에 첨�
 ## 보안과 사용량 기록
 
 - 고객 인증은 Keycloak OIDC Device Authorization Grant로 수행합니다.
+- 서비스 계정 인증은 별도 API의 APIM API-scoped subscription으로 수행합니다.
 - APIM에서 Foundry로의 인증은 Managed Identity와 Azure RBAC를 사용합니다.
 - APIM은 Keycloak의 `iss:sub`를 SHA-256으로 해시하여 사용자별 사용량을 집계합니다.
 - Workbook 표시용 Keycloak username은 `userLabel`로 Azure Monitor trace에 저장됩니다.
@@ -204,6 +231,7 @@ Terraform 배포, 모델 관리, Workbook과 로그 쿼리는
 
 - [Keycloak Device Authorization Grant](https://www.keycloak.org/docs/latest/server_admin/#_oid4vc_device_authorization_grant)
 - [Azure API Management validate-jwt 정책](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)
+- [Azure API Management subscriptions](https://learn.microsoft.com/azure/api-management/api-management-subscriptions)
 - [APIM Managed Identity 인증 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)
 - [Azure OpenAI Responses API](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/responses)
 - [Azure OpenAI Chat Completions](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/chatgpt)

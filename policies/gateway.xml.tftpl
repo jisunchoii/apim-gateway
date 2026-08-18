@@ -2,9 +2,9 @@
   <inbound>
     <base />
 
-    <!-- 1. 사용자 인증 및 인가
-         구독 키 없이 Keycloak bearer token만 허용한다. 서명, issuer, audience와 필수 scope/role을
-         모두 검증하므로 조건을 만족하지 못한 요청은 모델 backend에 도달하기 전에 401로 종료된다. -->
+%{ if authentication_mode == "oidc" ~}
+    <!-- 1. 최종 사용자 인증 및 인가
+         Keycloak bearer token의 서명, issuer, audience와 필수 scope/role을 모두 검증한다. -->
     <validate-jwt header-name="Authorization" require-scheme="Bearer"
                   failed-validation-httpcode="401"
                   failed-validation-error-message="Unauthorized. A valid access token is required."
@@ -30,17 +30,21 @@
       </required-claims>
 %{ endif ~}
     </validate-jwt>
+%{ else ~}
+    <!-- 1. 서비스 인증
+         subscription_required=true인 API가 policy 실행 전에 APIM subscription key를 검증한다.
+         policy에서 키를 다시 비교하거나 별도 secret을 관리하지 않는다. -->
+%{ endif ~}
 
     <!-- 2. 클라이언트 자격 증명 제거
-         Gateway와 Foundry backend는 API key나 APIM 구독 키를 사용하지 않는다. 클라이언트가
-         실수로 보낸 키가 backend로 전달되지 않도록 header와 query parameter에서 제거한다. -->
+         Foundry backend는 클라이언트 API key나 APIM 구독 키를 사용하지 않는다. 인증이 끝난
+         자격 증명이 backend로 전달되지 않도록 header와 query parameter에서 제거한다. -->
     <set-header name="api-key" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-query-parameter name="subscription-key" exists-action="delete" />
 
-    <!-- 3. 감사 추적용 사용자 및 요청 모델 식별
-         집계와 제한에는 Keycloak iss:sub 해시를 사용하고, Workbook 표시에는 별도 username
-         claim을 사용한다. 표시 claim이 없으면 해시 앞 12자리로 대체한다. -->
+    <!-- 3. 감사 추적용 호출자 및 요청 모델 식별 -->
+%{ if authentication_mode == "oidc" ~}
     <set-variable name="userId" value='@{
         var jwt = (Jwt)context.Variables["jwt"];
         var subject = string.IsNullOrEmpty(jwt.Subject) ? "unknown" : jwt.Subject;
@@ -63,6 +67,22 @@
         var label = jwt.Claims["${oidc_user_label_claim}"].FirstOrDefault();
         return string.IsNullOrWhiteSpace(label) ? fallback : label;
     }' />
+%{ else ~}
+    <set-variable name="userId" value='@{
+        var identity = "apim-subscription:" + context.Subscription.Id;
+        var hasher = System.Security.Cryptography.SHA256.Create();
+        var digest = hasher.ComputeHash(System.Text.Encoding.UTF8.GetBytes(identity));
+        hasher.Dispose();
+        return System.BitConverter.ToString(digest).Replace("-", "").ToLowerInvariant();
+    }' />
+
+    <set-variable name="userLabel" value='@{
+        var fallback = ((string)context.Variables["userId"]).Substring(0, 12);
+        return string.IsNullOrWhiteSpace(context.Subscription.Name)
+            ? fallback
+            : context.Subscription.Name;
+    }' />
+%{ endif ~}
 
     <set-variable name="requestedModel" value='@{
         try {
@@ -80,8 +100,8 @@
         return string.IsNullOrWhiteSpace(model) ? "(missing)" : model;
     }' />
 
-    <!-- 인증 이후 즉시 추적 정보를 남긴다. 따라서 400과 403도 사용자별로 집계되며,
-         JWT 검증 전에 종료되는 401만 의도적으로 익명으로 남는다. -->
+    <!-- 인증 이후 즉시 추적 정보를 남긴다. 따라서 400과 403도 호출자별로 집계되며,
+         인증 실패로 policy 전에 종료되는 401만 의도적으로 익명으로 남는다. -->
     <trace source="${trace_source}" severity="error">
       <message>@("user=" + (string)context.Variables["userId"] + " model=" + (string)context.Variables["traceModel"])</message>
       <metadata name="userId" value='@((string)context.Variables["userId"])' />

@@ -3,6 +3,11 @@ output "gateway_base_url" {
   value       = "${azurerm_api_management.apim.gateway_url}/openai/v1"
 }
 
+output "service_gateway_base_url" {
+  description = "Subscription-authenticated OpenAI-compatible base URL for service accounts."
+  value       = "${azurerm_api_management.apim.gateway_url}/service/openai/v1"
+}
+
 output "apim_public_ip_addresses" {
   description = "Gateway egress IPs allowed through the Foundry firewall. Static unless the instance is recreated or moved into a VNet."
   value       = azurerm_api_management.apim.public_ip_addresses

@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto"
-import { execFileSync } from "node:child_process"
 import {
-  chmod,
   mkdir,
   readFile,
   rename,
@@ -14,6 +12,7 @@ import { homedir } from "node:os"
 import { dirname, resolve } from "node:path"
 import { createKeycloakDeviceCredential } from "./keycloak-device-auth.js"
 import { readTerraformStringOutput } from "./terraform-settings.js"
+import { hardenTokenFile } from "./token-file-permissions.js"
 
 const readSetting = (environmentName, terraformOutput, defaultValue = "") => {
   const configured = process.env[environmentName]?.trim()
@@ -30,23 +29,6 @@ const readSetting = (environmentName, terraformOutput, defaultValue = "") => {
   throw new Error(
     `${environmentName} is not set and no configured Terraform output is available.`,
   )
-}
-
-const hardenTokenFile = async (path) => {
-  if (process.platform === "win32") {
-    const identity = execFileSync("whoami", [], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim()
-    execFileSync(
-      "icacls",
-      [path, "/inheritance:r", "/grant:r", `${identity}:(F)`],
-      { stdio: "ignore" },
-    )
-    return
-  }
-
-  await chmod(path, 0o600)
 }
 
 const main = async () => {
