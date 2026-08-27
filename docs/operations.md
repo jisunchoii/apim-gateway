@@ -170,6 +170,28 @@ RBAC, 모델 배포와 APIM backend를 생성합니다. 마지막 관리형 모�
 두 단계로 나누면 APIM policy가 backend를 참조하는 동안 backend가 먼저 삭제되는 문제를
 방지할 수 있습니다.
 
+### 배포와 Model Gateway Registry 자동 갱신
+
+일반 배포는 repository root에서 다음 wrapper를 사용합니다.
+
+```bash
+bash ./scripts/deploy.sh
+```
+
+Wrapper는 저장된 plan을 만든 뒤 정확히 그 plan을 apply하고, 성공한 Terraform state의
+`api_catalog_manifest` output으로 `docs/model-gateway-registry.html`을 갱신합니다.
+모델 이름, format/version, SKU/capacity, API 경로, APIM Backend ID/URL, Managed Identity
+audience와 RBAC가 Terraform에서 HTML로 전달되므로 Excel은 생성 pipeline에 포함되지 않습니다.
+apply 없이 plan만 확인할 때는 `bash ./scripts/deploy.sh --plan-only`을 사용합니다.
+
+APIM management API는 저장된 policy XML의 들여쓰기, attribute quote와 일부 줄바꿈을
+canonical format으로 다시 serialize합니다. 따라서 refresh 후 plan에 두 API policy의 formatting
+update가 보일 수 있지만 route, audience와 body가 같으면 의미상 변경은 아닙니다.
+
+Gateway 전용 Foundry account가 OpenAI와 Fireworks 모델을 함께 호스팅하므로 APIM Managed
+Identity는 resource scope의 `Cognitive Services User` 역할과 `https://ai.azure.com` audience를
+사용합니다.
+
 ### 기존 Foundry 프로젝트 모델 연결
 
 Terraform은 기존 프로젝트의 endpoint를 조회하고 APIM Managed Identity에 `Foundry User` 역할을

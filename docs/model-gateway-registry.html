@@ -1,0 +1,4162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="APIM 기반 LLM Gateway의 API, 클라이언트, 모델, Backend 및 운영 정책 카탈로그">
+  <title>Model Gateway Registry</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <script>
+    document.documentElement.setAttribute("data-theme", "light");
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    a {
+      color: var(--cp-link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code,
+    .mono {
+      font-family: Consolas, "Courier New", Courier, monospace;
+    }
+
+    .shell {
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-panel-strong);
+      box-shadow: 0 1px 2px var(--cp-border);
+    }
+
+    .topbar-inner {
+      width: min(1480px, calc(100% - 32px));
+      min-height: 64px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: auto minmax(240px, 560px) auto;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 0.625rem;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .brand-copy strong,
+    .brand-copy span {
+      display: block;
+    }
+
+    .brand-copy strong {
+      font-size: 14px;
+    }
+
+    .brand-copy span {
+      color: var(--cp-text-muted);
+      font-size: 11px;
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 40px;
+      padding: 0 44px 0 40px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      outline: none;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+    }
+
+    .search-box input:focus {
+      border-color: var(--cp-accent);
+      box-shadow: 0 0 0 3px var(--cp-accent-soft);
+    }
+
+    .search-icon,
+    .search-hint {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--cp-text-muted);
+      pointer-events: none;
+    }
+
+    .search-icon {
+      left: 14px;
+    }
+
+    .search-hint {
+      right: 12px;
+      padding: 2px 6px;
+      border: 1px solid var(--cp-border);
+      border-radius: 6px;
+      background: var(--cp-surface-soft);
+      font-size: 10px;
+    }
+
+    .icon-button {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      border-color: var(--cp-accent);
+      color: var(--cp-accent);
+    }
+
+    main {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.8fr);
+      gap: 24px;
+      align-items: stretch;
+      margin-bottom: 24px;
+    }
+
+    .hero-copy,
+    .hero-stats {
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-surface);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+    }
+
+    .hero-copy {
+      padding: 32px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      color: var(--cp-accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: var(--cp-accent);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 760px;
+      margin-bottom: 12px;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 1.04;
+      letter-spacing: -0.04em;
+      word-break: keep-all;
+    }
+
+    .hero-copy p {
+      max-width: 760px;
+      margin-bottom: 24px;
+      color: var(--cp-text-muted);
+      font-size: 16px;
+      word-break: keep-all;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hero-stats {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat {
+      min-height: 112px;
+      padding: 18px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .stat strong,
+    .stat span {
+      display: block;
+    }
+
+    .stat strong {
+      margin-bottom: 6px;
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .stat span {
+      color: var(--cp-text-muted);
+      font-size: 12px;
+    }
+
+    .tabs {
+      position: sticky;
+      top: 64px;
+      z-index: 15;
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      padding: 6px;
+      overflow-x: auto;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-panel-strong);
+      box-shadow: 0 1px 2px var(--cp-border);
+      scrollbar-width: thin;
+    }
+
+    .tab {
+      min-height: 38px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 0.625rem;
+      background: transparent;
+      color: var(--cp-text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .tab:hover {
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+    }
+
+    .tab.active {
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 8px 0 18px;
+    }
+
+    .section-heading h2 {
+      margin-bottom: 4px;
+      font-size: 26px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-heading p {
+      max-width: 920px;
+      margin-bottom: 0;
+      color: var(--cp-text-muted);
+      font-size: 13px;
+      word-break: keep-all;
+    }
+
+    .result-count {
+      color: var(--cp-text-muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid.four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-surface);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+    }
+
+    .card:hover {
+      border-color: var(--cp-border-strong);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      min-width: 0;
+    }
+
+    .card-title h3 {
+      margin-bottom: 4px;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+    }
+
+    .card-title p {
+      margin-bottom: 0;
+      color: var(--cp-text-muted);
+      font-size: 12px;
+    }
+
+    .badge-row,
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px 8px;
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge.accent {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+    }
+
+    .badge.success {
+      border-color: var(--cp-success);
+      color: var(--cp-success);
+    }
+
+    .badge.warning {
+      border-color: var(--cp-warning);
+      color: var(--cp-warning);
+    }
+
+    .badge.danger {
+      border-color: var(--cp-danger);
+      color: var(--cp-danger);
+    }
+
+    .endpoint {
+      margin: 12px 0;
+      padding: 12px;
+      overflow-x: auto;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+      color: var(--cp-text);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .method {
+      margin-right: 8px;
+      color: var(--cp-accent);
+      font-weight: 800;
+    }
+
+    .facts {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.34fr) minmax(0, 1fr);
+      gap: 8px 12px;
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .facts dt {
+      color: var(--cp-text-muted);
+      font-weight: 600;
+    }
+
+    .facts dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .filters {
+      margin-bottom: 18px;
+      padding: 14px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .filter-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .filter-label {
+      width: 72px;
+      flex: 0 0 auto;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .filter-chip {
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface-soft);
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .filter-chip:hover,
+    .filter-chip.active {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+    }
+
+    details {
+      margin-top: 14px;
+      border-top: 1px solid var(--cp-border);
+    }
+
+    summary {
+      padding-top: 12px;
+      color: var(--cp-link);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    details .facts {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .table-card {
+      margin-top: 20px;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .table-card > header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .table-card > header h3 {
+      margin: 0 0 4px;
+      font-size: 15px;
+    }
+
+    .table-card > header p {
+      margin: 0;
+      color: var(--cp-text-muted);
+      font-size: 12px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 620px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      min-width: 150px;
+      padding: 12px;
+      border-right: 1px solid var(--cp-border);
+      border-bottom: 1px solid var(--cp-border);
+      text-align: left;
+      vertical-align: top;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-weight: 700;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+
+    tbody tr:hover td {
+      background: var(--cp-accent-soft);
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 12px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .timeline-step {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--cp-accent);
+      border-radius: 50%;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      font-weight: 800;
+    }
+
+    .timeline-content {
+      padding: 16px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+    }
+
+    .timeline-content h3 {
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      margin: 14px 0;
+      overflow-x: auto;
+    }
+
+    .flow-step {
+      min-width: 150px;
+      flex: 1 0 150px;
+      padding: 12px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .flow-step strong,
+    .flow-step span {
+      display: block;
+    }
+
+    .flow-step strong {
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .flow-step span {
+      color: var(--cp-text-muted);
+      font-size: 11px;
+    }
+
+    .flow-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--cp-accent);
+      font-weight: 800;
+    }
+
+    .hook-overview-card {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .hook-overview-card .product-icon {
+      margin-top: 2px;
+    }
+
+    .hook-overview-card h3 {
+      margin-bottom: 4px;
+      font-size: 16px;
+    }
+
+    .hook-overview-card p {
+      margin-bottom: 12px;
+      color: var(--cp-text-muted);
+      font-size: 12px;
+    }
+
+    .hook-overview-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .hook-overview-item {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+      font-size: 11px;
+    }
+
+    .hook-overview-item strong {
+      color: var(--cp-text);
+    }
+
+    .hook-overview-item span {
+      color: var(--cp-text-muted);
+      overflow-wrap: anywhere;
+    }
+
+    .hook-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .hook-card-header {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    .hook-card-header .card-title {
+      align-self: center;
+    }
+
+    .hook-card-header .badge {
+      align-self: start;
+    }
+
+    .hook-summary,
+    .hook-source {
+      grid-column: 2 / -1;
+      margin: 0;
+    }
+
+    .hook-summary {
+      color: var(--cp-text-soft);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .hook-source {
+      padding: 8px 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      color: var(--cp-text-muted);
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    .hook-card-body {
+      padding: 18px 20px 20px;
+    }
+
+    .hook-block-title {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--cp-text-muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hook-step-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .hook-step {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .hook-step-number {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .hook-step strong,
+    .hook-step span {
+      display: block;
+    }
+
+    .hook-step strong {
+      margin: 1px 0 3px;
+      font-size: 12px;
+    }
+
+    .hook-step span {
+      color: var(--cp-text-muted);
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .hook-step .hook-step-number {
+      display: grid;
+      place-items: center;
+      color: var(--cp-accent);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .hook-card .code-block {
+      margin-top: 0;
+    }
+
+    .hook-card details {
+      margin-top: 16px;
+    }
+
+    .credential-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .credential-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    .credential-card-header h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .credential-card-body {
+      padding: 18px 20px 20px;
+    }
+
+    .credential-card .hook-source {
+      margin-top: 12px;
+    }
+
+    .credential-card .hook-step-list {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .credential-details {
+      padding: 14px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .code-block {
+      margin: 14px 0 0;
+      padding: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    .spec-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .spec-card-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    .spec-card-header .endpoint {
+      grid-column: 1 / -1;
+      margin: 2px 0 0;
+    }
+
+    .spec-card-body {
+      padding: 18px 20px 20px;
+    }
+
+    .spec-json-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: 12px;
+    }
+
+    .spec-json-panel {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+    }
+
+    .spec-json-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--cp-border);
+      color: var(--cp-text-muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .json-block {
+      min-height: 210px;
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      color: var(--cp-text);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+
+    .spec-card details {
+      margin-top: 16px;
+    }
+
+    .route-overview-card,
+    .route-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .route-overview-card.direct,
+    .route-card.direct {
+      border-top: 3px solid var(--cp-success);
+    }
+
+    .route-overview-card.proxy,
+    .route-card.proxy {
+      border-top: 3px solid var(--cp-warning);
+    }
+
+    .route-overview-header,
+    .route-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    .route-overview-header h3,
+    .route-card-header h3 {
+      margin-bottom: 3px;
+      font-size: 15px;
+    }
+
+    .route-overview-header p,
+    .route-card-header p {
+      margin: 0;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+    }
+
+    .route-card-header .card-title {
+      flex: 1;
+    }
+
+    .route-overview-body,
+    .route-card-body {
+      padding: 16px 18px 18px;
+    }
+
+    .route-path {
+      display: flex;
+      align-items: stretch;
+      gap: 7px;
+      overflow-x: auto;
+    }
+
+    .route-node {
+      min-width: 90px;
+      flex: 1 1 0;
+      padding: 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .route-node.proxy-node {
+      border-color: var(--cp-warning);
+    }
+
+    .route-node strong,
+    .route-node span {
+      display: block;
+    }
+
+    .route-node strong {
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+
+    .route-node span {
+      color: var(--cp-text-muted);
+      font-size: 9px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .route-arrow {
+      display: grid;
+      place-items: center;
+      flex: 0 0 18px;
+      color: var(--cp-accent);
+      font-weight: 800;
+    }
+
+    .route-compat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+      gap: 12px;
+    }
+
+    .route-compat-card {
+      padding: 16px;
+    }
+
+    .route-compat-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .route-compat-header h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .route-compat-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .route-compat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+      font-size: 11px;
+    }
+
+    .route-card .endpoint {
+      margin: 14px 0 0;
+    }
+
+    .route-card details {
+      margin-top: 14px;
+    }
+
+    .notice {
+      margin: 16px 0;
+      padding: 14px 16px;
+      border-left: 3px solid var(--cp-accent);
+      border-radius: 0.625rem;
+      background: var(--cp-accent-soft);
+      color: var(--cp-text);
+      font-size: 13px;
+    }
+
+    .architecture-card {
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .architecture-flow {
+      display: grid;
+      grid-template-columns: minmax(130px, 0.55fr) 28px minmax(180px, 0.7fr) 28px minmax(420px, 2fr);
+      align-items: center;
+      gap: 8px;
+    }
+
+    .architecture-node {
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .architecture-node.accent {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+    }
+
+    .architecture-node.success {
+      border-color: var(--cp-success);
+    }
+
+    .architecture-node.danger {
+      border-color: var(--cp-danger);
+    }
+
+    .architecture-node strong,
+    .architecture-node span,
+    .architecture-node small {
+      display: block;
+    }
+
+    .architecture-node strong {
+      margin: 3px 0 5px;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .architecture-node span,
+    .architecture-node small {
+      color: var(--cp-text-muted);
+      font-size: 10px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .architecture-node .architecture-kicker {
+      color: var(--cp-accent);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .architecture-arrow {
+      color: var(--cp-accent);
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .backend-lanes {
+      display: grid;
+      gap: 8px;
+    }
+
+    .backend-lane {
+      display: grid;
+      grid-template-columns: minmax(160px, 0.9fr) 28px minmax(170px, 1.1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+    }
+
+    .architecture-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+    }
+
+    .architecture-legend span {
+      padding: 4px 8px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .empty {
+      padding: 48px 20px;
+      border: 1px dashed var(--cp-border-strong);
+      border-radius: 16px;
+      color: var(--cp-text-muted);
+      text-align: center;
+    }
+
+    .source-link {
+      display: block;
+      margin-top: 12px;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+
+    footer {
+      border-top: 1px solid var(--cp-border);
+      background: var(--cp-bg-elevated);
+    }
+
+    .footer-inner {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 20px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .grid.four,
+      .grid.three {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar-inner {
+        width: min(100% - 20px, 1480px);
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 10px 0;
+      }
+
+      .brand-copy span {
+        display: none;
+      }
+
+      .search-box {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      main {
+        width: min(100% - 20px, 1480px);
+        padding-top: 20px;
+      }
+
+      .hero-copy {
+        padding: 22px;
+      }
+
+      .hero-stats {
+        padding: 12px;
+      }
+
+      .tabs {
+        top: 112px;
+      }
+
+      .grid.two,
+      .grid.three,
+      .grid.four {
+        grid-template-columns: 1fr;
+      }
+
+      .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .filter-group {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .filter-label {
+        width: auto;
+      }
+
+      .facts {
+        grid-template-columns: 1fr;
+      }
+
+      .facts dd {
+        margin-bottom: 6px;
+      }
+
+      .hook-overview-item,
+      .hook-card-header {
+        grid-template-columns: 1fr;
+      }
+
+      .hook-summary,
+      .hook-source {
+        grid-column: 1;
+      }
+
+      .hook-step-list,
+      .credential-card .hook-step-list {
+        grid-template-columns: 1fr;
+      }
+
+      .architecture-flow {
+        grid-template-columns: 1fr;
+      }
+
+      .architecture-flow > .architecture-arrow {
+        transform: rotate(90deg);
+      }
+
+      .backend-lane {
+        grid-template-columns: 1fr;
+      }
+
+      .backend-lane > .architecture-arrow {
+        transform: rotate(90deg);
+      }
+
+      .footer-inner {
+        width: min(100% - 20px, 1480px);
+        flex-direction: column;
+      }
+    }
+
+    /* Console layout foundation. */
+    body {
+      background: var(--cp-bg-elevated);
+    }
+
+    .topbar {
+      min-height: 64px;
+      background: var(--cp-surface);
+      box-shadow: 0 1px 2px var(--cp-border);
+    }
+
+    .topbar-inner {
+      width: 100%;
+      min-height: 64px;
+      padding: 0 16px;
+      grid-template-columns: auto auto minmax(220px, auto) minmax(280px, 720px) auto;
+      gap: 12px;
+    }
+
+    .console-icon-button,
+    .project-selector {
+      height: 40px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      cursor: pointer;
+    }
+
+    .console-icon-button {
+      width: 40px;
+      font-size: 18px;
+    }
+
+    .console-icon-button:hover,
+    .project-selector:hover {
+      background: var(--cp-surface-soft);
+      border-color: var(--cp-border-strong);
+    }
+
+    .project-selector {
+      max-width: 310px;
+      padding: 0 14px;
+      overflow: hidden;
+      color: var(--cp-text-soft);
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      background: var(--cp-accent);
+      border-radius: 6px;
+    }
+
+    .brand-copy span {
+      display: none;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .console-layout {
+      min-height: calc(100vh - 64px);
+      display: grid;
+      grid-template-columns: 252px minmax(0, 1fr);
+      transition: grid-template-columns 160ms ease;
+    }
+
+    .side-nav {
+      position: sticky;
+      top: 64px;
+      z-index: 14;
+      height: calc(100vh - 64px);
+      align-self: start;
+      padding: 12px;
+      overflow-y: auto;
+      border-right: 1px solid var(--cp-border);
+      background: var(--cp-surface);
+    }
+
+    .side-group-label {
+      padding: 10px 12px 6px;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .side-divider {
+      margin: 10px 6px;
+      border-top: 1px solid var(--cp-border);
+    }
+
+    .side-link {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 2px 0;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 0.625rem;
+      background: transparent;
+      color: var(--cp-text-soft);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .side-link:hover {
+      background: var(--cp-surface-soft);
+    }
+
+    .side-link.active {
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      font-weight: 700;
+    }
+
+    .nav-icon {
+      width: 22px;
+      flex: 0 0 22px;
+      color: inherit;
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    body.nav-collapsed .console-layout {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+
+    body.nav-collapsed .side-nav {
+      padding-inline: 8px;
+    }
+
+    body.nav-collapsed .nav-text,
+    body.nav-collapsed .side-group-label,
+    body.nav-collapsed .side-divider {
+      display: none;
+    }
+
+    body.nav-collapsed .side-link {
+      justify-content: center;
+      padding: 0;
+    }
+
+    main {
+      width: auto;
+      min-width: 0;
+      margin: 0;
+      padding: 28px 32px 64px;
+    }
+
+    .page-header {
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .breadcrumb {
+      margin-bottom: 12px;
+      color: var(--cp-text-muted);
+      font-size: 12px;
+    }
+
+    .page-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    .page-heading-copy {
+      max-width: 820px;
+    }
+
+    .page-heading h1 {
+      margin-bottom: 8px;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .page-heading p {
+      margin-bottom: 16px;
+      color: var(--cp-text-muted);
+      font-size: 14px;
+      word-break: keep-all;
+    }
+
+    .hero-stats {
+      min-width: 430px;
+      padding: 0;
+      display: flex;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .stat {
+      min-width: 92px;
+      min-height: 62px;
+      padding: 6px 16px;
+      border: 0;
+      border-left: 1px solid var(--cp-border);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .stat strong {
+      margin-bottom: 4px;
+      font-size: 24px;
+    }
+
+    .card {
+      border-radius: 0.625rem;
+      box-shadow: none;
+    }
+
+    .card:hover {
+      border-color: var(--cp-border-strong);
+      box-shadow: var(--cp-shadow);
+    }
+
+    .card-title {
+      flex: 1;
+    }
+
+    .product-icon {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-accent-soft);
+      color: var(--cp-accent);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .model-card .card-header {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      justify-content: initial;
+    }
+
+    .model-card .badge-row {
+      grid-column: 2;
+    }
+
+    .model-card .card-title h3 {
+      word-break: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .section-heading h2 {
+      font-size: 22px;
+    }
+
+    .badge {
+      border-radius: 0.625rem;
+    }
+
+    .filter-chip {
+      border-radius: 0.625rem;
+    }
+
+    footer {
+      background: var(--cp-surface);
+    }
+
+    .footer-inner {
+      width: auto;
+      margin: 0 32px 0 284px;
+      transition: margin-left 160ms ease;
+    }
+
+    body.nav-collapsed .footer-inner {
+      margin-left: 104px;
+    }
+
+    /* Refined enterprise console treatment. */
+    body {
+      font-size: 14px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .topbar {
+      min-height: 56px;
+      box-shadow: none;
+    }
+
+    .topbar-inner {
+      min-height: 56px;
+      padding: 0 14px;
+      gap: 10px;
+    }
+
+    .brand {
+      gap: 9px;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .brand-copy strong {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .search-box input,
+    .console-icon-button,
+    .project-selector {
+      height: 36px;
+      border-radius: 6px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .console-icon-button {
+      width: 36px;
+      font-size: 16px;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+    }
+
+    .console-layout {
+      min-height: calc(100vh - 56px);
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+
+    .side-nav {
+      top: 56px;
+      height: calc(100vh - 56px);
+      padding: 14px 10px;
+      background: var(--cp-bg);
+    }
+
+    .side-group-label {
+      padding: 12px 10px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .side-link {
+      min-height: 38px;
+      gap: 10px;
+      margin: 1px 0;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .side-link.active {
+      border-color: var(--cp-border);
+      background: var(--cp-surface);
+      box-shadow: inset 3px 0 0 var(--cp-accent);
+    }
+
+    .nav-icon {
+      width: 20px;
+      flex-basis: 20px;
+      font-size: 10px;
+    }
+
+    main {
+      padding: 30px 36px 72px;
+    }
+
+    .page-header {
+      margin-bottom: 30px;
+      padding-bottom: 22px;
+    }
+
+    .breadcrumb {
+      margin-bottom: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .page-heading {
+      gap: 40px;
+    }
+
+    .page-heading h1 {
+      margin-bottom: 7px;
+      font-size: 30px;
+      font-weight: 650;
+      line-height: 1.16;
+      letter-spacing: -0.025em;
+    }
+
+    .page-heading p {
+      max-width: 780px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .hero-meta {
+      gap: 6px;
+    }
+
+    .hero-stats {
+      min-width: 390px;
+    }
+
+    .stat {
+      min-width: 84px;
+      min-height: 56px;
+      padding: 4px 14px;
+    }
+
+    .stat strong {
+      font-size: 21px;
+      font-weight: 650;
+    }
+
+    .stat span {
+      font-size: 10px;
+    }
+
+    .section-heading {
+      align-items: end;
+      margin: 36px 0 14px;
+      padding-bottom: 11px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .section-heading:first-child {
+      margin-top: 0;
+    }
+
+    .section-heading h2 {
+      margin-bottom: 3px;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+
+    .section-heading p {
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .result-count {
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .grid {
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: none;
+    }
+
+    .card:hover {
+      border-color: var(--cp-border-strong);
+      box-shadow: none;
+    }
+
+    .card-header {
+      margin-bottom: 12px;
+    }
+
+    .card-title h3 {
+      margin-bottom: 3px;
+      font-size: 14px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .card-title p {
+      font-size: 11px;
+    }
+
+    .product-icon {
+      width: 36px;
+      height: 36px;
+      flex-basis: 36px;
+      border-radius: 8px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text-soft);
+      font-size: 9px;
+      letter-spacing: 0.02em;
+    }
+
+    .model-card .card-header {
+      grid-template-columns: 36px minmax(0, 1fr);
+    }
+
+    .badge {
+      min-height: 21px;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .badge.accent {
+      background: transparent;
+    }
+
+    .filters {
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--cp-bg);
+    }
+
+    .filter-label {
+      font-size: 10px;
+    }
+
+    .filter-chip {
+      min-height: 27px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 10px;
+    }
+
+    .filter-chip:hover,
+    .filter-chip.active {
+      background: var(--cp-surface);
+    }
+
+    .endpoint,
+    .code-block {
+      border-radius: 8px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .endpoint {
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .code-block,
+    .json-block {
+      font-size: 10px;
+      line-height: 1.65;
+    }
+
+    details {
+      margin-top: 12px;
+    }
+
+    summary {
+      color: var(--cp-text-soft);
+      font-size: 11px;
+    }
+
+    .notice {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--cp-surface-soft);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .hook-overview-item,
+    .hook-step,
+    .route-node,
+    .route-compat-row,
+    .architecture-node,
+    .backend-lane,
+    .timeline-content {
+      border-radius: 8px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .hook-step-number {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--cp-accent);
+      border-radius: 6px;
+      background: var(--cp-surface);
+    }
+
+    .hook-step {
+      grid-template-columns: 24px minmax(0, 1fr);
+      padding: 9px;
+    }
+
+    .hook-card-header,
+    .credential-card-header,
+    .spec-card-header,
+    .route-overview-header,
+    .route-card-header,
+    .table-card > header {
+      background: var(--cp-surface);
+    }
+
+    .hook-card-body,
+    .credential-card-body,
+    .spec-card-body,
+    .route-overview-body,
+    .route-card-body {
+      padding: 16px 18px 18px;
+    }
+
+    .hook-source {
+      border-radius: 6px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .spec-json-panel {
+      border-radius: 8px;
+      background: var(--cp-bg-elevated);
+    }
+
+    .route-overview-card.direct,
+    .route-card.direct {
+      border-top: 1px solid var(--cp-border);
+      border-left: 3px solid var(--cp-success);
+    }
+
+    .route-overview-card.proxy,
+    .route-card.proxy {
+      border-top: 1px solid var(--cp-border);
+      border-left: 3px solid var(--cp-warning);
+    }
+
+    .route-path {
+      gap: 6px;
+    }
+
+    .route-arrow,
+    .flow-arrow,
+    .architecture-arrow {
+      color: var(--cp-text-muted);
+    }
+
+    .architecture-legend span {
+      border-radius: 6px;
+      background: transparent;
+    }
+
+    .table-card {
+      margin-top: 18px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      font-size: 11px;
+    }
+
+    th {
+      background: var(--cp-bg-elevated);
+      font-size: 10px;
+      letter-spacing: 0.02em;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: var(--cp-bg-elevated);
+    }
+
+    tbody tr:hover td {
+      background: var(--cp-accent-soft);
+    }
+
+    footer {
+      background: var(--cp-bg);
+    }
+
+    @media (max-width: 1080px) {
+      .topbar-inner {
+        grid-template-columns: auto auto minmax(220px, 1fr) auto;
+      }
+
+      .project-selector {
+        display: none;
+      }
+
+      .page-heading {
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .hero-stats {
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar-inner {
+        width: 100%;
+        min-height: 112px;
+        padding: 8px 10px;
+        grid-template-columns: auto 1fr auto;
+      }
+
+      .search-box {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      .console-layout,
+      body.nav-collapsed .console-layout {
+        display: block;
+      }
+
+      .side-nav {
+        top: 112px;
+        height: auto;
+        display: flex;
+        gap: 4px;
+        padding: 6px 10px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-right: 0;
+        border-bottom: 1px solid var(--cp-border);
+      }
+
+      .side-group-label,
+      .side-divider,
+      .nav-icon {
+        display: none;
+      }
+
+      .side-link,
+      body.nav-collapsed .side-link {
+        width: auto;
+        min-width: max-content;
+        min-height: 36px;
+        padding: 0 12px;
+      }
+
+      body.nav-collapsed .side-nav {
+        display: none;
+      }
+
+      main {
+        width: auto;
+        padding: 20px 12px 48px;
+      }
+
+      .hero-stats {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .stat {
+        border: 1px solid var(--cp-border);
+      }
+
+      .footer-inner,
+      body.nav-collapsed .footer-inner {
+        width: auto;
+        margin: 0 12px;
+      }
+    }
+
+    /* Developer Workbench variant: white canvas, blue actions, larger Aptos type. */
+    body {
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-family: Aptos, Calibri, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+    }
+
+    h1,
+    h2,
+    h3,
+    .brand-copy,
+    .side-group-label,
+    .table-card > header {
+      font-family: "Aptos Display", Aptos, Calibri, "Segoe UI", sans-serif;
+    }
+
+    .topbar {
+      min-height: 52px;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-surface);
+      box-shadow: none;
+    }
+
+    .topbar-inner {
+      min-height: 52px;
+      padding: 0 12px;
+      gap: 10px;
+    }
+
+    .brand {
+      gap: 9px;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 0.625rem;
+      background: var(--cp-link);
+      color: var(--cp-surface);
+      font-size: 11px;
+    }
+
+    .brand-copy strong {
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .search-box input,
+    .console-icon-button,
+    .project-selector {
+      height: 36px;
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      font-size: 12px;
+    }
+
+    .search-box input:focus {
+      border-color: var(--cp-link);
+      box-shadow: 0 0 0 3px var(--cp-highlight);
+    }
+
+    .console-icon-button {
+      width: 36px;
+      font-size: 16px;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 0.625rem;
+      background: var(--cp-link);
+      color: var(--cp-surface);
+    }
+
+    .console-layout {
+      min-height: calc(100vh - 52px);
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+
+    .side-nav {
+      top: 52px;
+      height: calc(100vh - 52px);
+      padding: 12px 10px;
+      background: var(--cp-surface);
+    }
+
+    .side-group-label {
+      padding: 12px 10px 7px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+
+    .side-link {
+      min-height: 40px;
+      gap: 10px;
+      margin: 1px 0;
+      padding: 0 10px;
+      border: 1px solid transparent;
+      border-radius: 0.625rem;
+      font-size: 13px;
+    }
+
+    .side-link:hover {
+      background: var(--cp-surface-soft);
+    }
+
+    .side-link.active {
+      border-color: var(--cp-border);
+      background: var(--cp-surface-soft);
+      color: var(--cp-link);
+      box-shadow: inset 3px 0 0 var(--cp-link);
+    }
+
+    .nav-icon {
+      width: 22px;
+      flex-basis: 22px;
+      color: inherit;
+      font-size: 11px;
+    }
+
+    main {
+      padding: 26px 30px 64px;
+      background: var(--cp-surface);
+    }
+
+    .page-header {
+      margin-bottom: 26px;
+      padding-bottom: 22px;
+    }
+
+    .breadcrumb {
+      margin-bottom: 10px;
+      color: var(--cp-text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .page-heading {
+      gap: 28px;
+    }
+
+    .page-heading h1 {
+      margin-bottom: 7px;
+      font-size: 32px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    .page-heading p {
+      max-width: 820px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .hero-stats {
+      min-width: 410px;
+    }
+
+    .stat {
+      min-width: 90px;
+      min-height: 58px;
+      padding: 5px 15px;
+    }
+
+    .stat strong {
+      font-size: 23px;
+    }
+
+    .stat span {
+      font-size: 11px;
+    }
+
+    .section-heading {
+      margin: 34px 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .section-heading:first-child {
+      margin-top: 0;
+    }
+
+    .section-heading h2 {
+      margin-bottom: 3px;
+      font-size: 21px;
+      font-weight: 650;
+    }
+
+    .section-heading p {
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .result-count {
+      font-size: 11px;
+    }
+
+    .grid {
+      gap: 14px;
+    }
+
+    .card {
+      padding: 19px;
+      border-radius: 16px;
+      background: var(--cp-surface);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+    }
+
+    .card:hover {
+      border-color: var(--cp-border-strong);
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border);
+    }
+
+    .card-title h3 {
+      font-size: 16px;
+      font-weight: 650;
+    }
+
+    .card-title p {
+      font-size: 12px;
+    }
+
+    .product-icon {
+      width: 38px;
+      height: 38px;
+      flex-basis: 38px;
+      border-radius: 0.625rem;
+      border-color: var(--cp-border);
+      background: var(--cp-surface-soft);
+      color: var(--cp-link);
+      font-size: 10px;
+    }
+
+    .model-card .card-header {
+      grid-template-columns: 38px minmax(0, 1fr);
+    }
+
+    .badge {
+      min-height: 23px;
+      padding: 2px 8px;
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      font-size: 10px;
+    }
+
+    .badge.accent {
+      border-color: var(--cp-link);
+      background: var(--cp-surface);
+      color: var(--cp-link);
+    }
+
+    .filter-chip {
+      min-height: 30px;
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      font-size: 11px;
+    }
+
+    .filter-chip:hover,
+    .filter-chip.active {
+      border-color: var(--cp-link);
+      background: var(--cp-surface-soft);
+      color: var(--cp-link);
+    }
+
+    .method,
+    a,
+    summary {
+      color: var(--cp-link);
+    }
+
+    .endpoint {
+      padding: 11px 12px;
+      border-radius: 0.625rem;
+      background: var(--cp-bg-elevated);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .code-block,
+    .json-block {
+      background: var(--cp-bg-elevated);
+      color: var(--cp-text);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .notice {
+      padding: 13px 15px;
+      border-left-color: var(--cp-link);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+      font-size: 13px;
+    }
+
+    .timeline-step,
+    .hook-step .hook-step-number {
+      border-color: var(--cp-link);
+      background: var(--cp-surface);
+      color: var(--cp-link);
+    }
+
+    .architecture-node.accent {
+      border-color: var(--cp-link);
+      background: var(--cp-surface-soft);
+    }
+
+    .architecture-node .architecture-kicker,
+    .architecture-arrow {
+      color: var(--cp-link);
+    }
+
+    .hook-card-header,
+    .credential-card-header,
+    .spec-card-header,
+    .route-overview-header,
+    .route-card-header,
+    .table-card > header {
+      background: var(--cp-surface);
+    }
+
+    .hook-step,
+    .hook-overview-item,
+    .route-node,
+    .route-compat-row,
+    .architecture-node,
+    .backend-lane,
+    .timeline-content {
+      background: var(--cp-bg-elevated);
+    }
+
+    .route-arrow,
+    .flow-arrow {
+      color: var(--cp-text-muted);
+    }
+
+    .route-compat-grid {
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .route-compat-card {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .route-compat-list {
+      flex: 1;
+    }
+
+    .route-compat-grid + .filters {
+      margin-top: 0;
+    }
+
+    .route-overview-card.direct,
+    .route-overview-card.proxy,
+    .route-card.direct,
+    .route-card.proxy {
+      border: 1px solid var(--cp-border);
+    }
+
+    .route-overview-card.direct .route-overview-header,
+    .route-overview-card.proxy .route-overview-header,
+    .route-card.direct .route-card-header,
+    .route-card.proxy .route-card-header {
+      background: var(--cp-surface);
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      font-size: 12px;
+    }
+
+    th {
+      background: var(--cp-bg-elevated);
+      font-size: 11px;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: var(--cp-bg-elevated);
+    }
+
+    tbody tr:hover td {
+      background: var(--cp-surface-soft);
+    }
+
+    footer {
+      background: var(--cp-surface);
+    }
+
+    @media (max-width: 1080px) {
+      .project-selector {
+        display: none;
+      }
+
+      .hero-stats {
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        min-height: 112px;
+      }
+
+      .topbar-inner {
+        min-height: 112px;
+        padding: 8px 10px;
+        grid-template-columns: auto 1fr auto;
+      }
+
+      .search-box {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      .console-layout,
+      body.nav-collapsed .console-layout {
+        display: block;
+      }
+
+      .side-nav {
+        top: 112px;
+        height: auto;
+        display: flex;
+        padding: 6px 10px;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--cp-border);
+      }
+
+      .side-group-label,
+      .side-divider,
+      .nav-icon {
+        display: none;
+      }
+
+      .side-link,
+      body.nav-collapsed .side-link {
+        width: auto;
+        min-width: max-content;
+        min-height: 38px;
+        padding: 0 12px;
+      }
+
+      main {
+        padding: 20px 12px 48px;
+      }
+
+      .hero-stats {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <button class="console-icon-button" id="menu-toggle" type="button" aria-label="탐색 메뉴 접기">☰</button>
+        <div class="brand">
+          <div class="brand-mark">MG</div>
+          <div class="brand-copy">
+            <strong>Model Gateway</strong>
+            <span>Model Gateway Registry</span>
+          </div>
+        </div>
+        <button class="project-selector" id="gateway-selector" type="button" title="현재 Gateway">apim-claudegw-dev-eus2-015pnu ▾</button>
+        <label class="search-box">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input id="global-search" type="search" placeholder="Registry에서 모델, API, client 검색" autocomplete="off">
+          <span class="search-hint">/</span>
+        </label>
+        <div class="top-actions">
+          <button class="console-icon-button" type="button" aria-label="도움말">?</button>
+          <div class="avatar" aria-label="Model Gateway">MG</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="console-layout">
+      <nav class="side-nav" id="tabs" aria-label="Registry 카테고리">
+        <div class="side-group-label">Registry</div>
+        <button class="tab side-link" data-view="catalog" type="button"><span class="nav-icon">API</span><span class="nav-text">API 카탈로그</span></button>
+        <button class="tab side-link" data-view="hooks" type="button"><span class="nav-icon">HK</span><span class="nav-text">Client Hooks</span></button>
+        <button class="tab side-link" data-view="routes" type="button"><span class="nav-icon">RT</span><span class="nav-text">호출 경로</span></button>
+        <button class="tab side-link" data-view="parameters" type="button"><span class="nav-icon">{ }</span><span class="nav-text">요청 스펙</span></button>
+        <div class="side-divider"></div>
+        <div class="side-group-label">운영 및 관리</div>
+        <button class="tab side-link" data-view="policy" type="button"><span class="nav-icon">PL</span><span class="nav-text">APIM 정책</span></button>
+        <button class="tab side-link" data-view="backends" type="button"><span class="nav-icon">BE</span><span class="nav-text">Backend &amp; Endpoint</span></button>
+        <button class="tab side-link" data-view="sources" type="button"><span class="nav-icon">DOC</span><span class="nav-text">근거 자료</span></button>
+      </nav>
+
+      <main>
+        <section class="page-header">
+          <div class="breadcrumb">Model Gateway / Registry</div>
+          <div class="page-heading">
+            <div class="page-heading-copy">
+              <h1>Model Gateway Registry</h1>
+              <p>OpenCode, Codex CLI, Claude Code에서 GPT와 Foundry 모델을 호출하는 경로, 인증, 변환 프록시, 요청 파라미터와 Backend 운영 구성을 탐색합니다.</p>
+              <div class="hero-meta">
+                <span class="badge accent" id="gateway-name">apim-claudegw-dev-eus2-015pnu</span>
+                <span class="badge">East US 2</span>
+                <span class="badge">OIDC + Service Account</span>
+              </div>
+            </div>
+            <div class="hero-stats" id="hero-stats"></div>
+          </div>
+        </section>
+
+        <section id="content" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <footer>
+      <div class="footer-inner">
+        <span>Source: Terraform output api_catalog_manifest + static client integration guidance</span>
+        <span id="catalog-generated-at">운영 구성은 Terraform과 APIM policy를 source of truth로 사용</span>
+      </div>
+    </footer>
+  </div>
+    <!-- BEGIN_TERRAFORM_CATALOG -->
+    <script id="terraform-api-catalog">
+      window.__TERRAFORM_CATALOG__ =
+      {
+        "backend_identity": {
+          "audience": "https://ai.azure.com",
+          "role": "Cognitive Services User"
+        },
+        "gateway": {
+          "foundry_account_name": "ais-claudegw-dev-eus2-015pnu",
+          "location": "eastus2",
+          "name": "apim-claudegw-dev-eus2-015pnu",
+          "oidc_base_url": "https://apim-claudegw-dev-eus2-015pnu.azure-api.net/openai/v1",
+          "service_base_url": "https://apim-claudegw-dev-eus2-015pnu.azure-api.net/service/openai/v1"
+        },
+        "models": [
+          {
+            "api": "chat",
+            "api_path": "/chat/completions",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-dce548823a480bcd",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 50000,
+            "capacity_units": 50,
+            "model_format": "Fireworks",
+            "model_name": "FW-DeepSeek-V4-Flash-0731",
+            "model_version": "1",
+            "name": "FW-DeepSeek-V4-Flash-0731",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.Nil",
+            "sku_name": "DataZoneStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "chat",
+            "api_path": "/chat/completions",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-031e74cc7b09cf49",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 150000,
+            "capacity_units": 150,
+            "model_format": "Fireworks",
+            "model_name": "FW-GLM-5.2",
+            "model_version": "1",
+            "name": "FW-GLM-5.2",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.Nil",
+            "sku_name": "DataZoneStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "chat",
+            "api_path": "/chat/completions",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-6878138e52a83205",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 300000,
+            "capacity_units": 300,
+            "model_format": "Fireworks",
+            "model_name": "FW-Kimi-K3",
+            "model_version": "1",
+            "name": "FW-Kimi-K3",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.Nil",
+            "sku_name": "DataZoneStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "responses",
+            "api_path": "/responses",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-7bf2b83a5ca00341",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 1000000,
+            "capacity_units": 1000,
+            "model_format": "OpenAI",
+            "model_name": "gpt-5.6-luna",
+            "model_version": "2026-07-09",
+            "name": "gpt-5.6-luna",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.DefaultV2",
+            "sku_name": "GlobalStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "responses",
+            "api_path": "/responses",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-6b6cb90c15788bb2",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 1000000,
+            "capacity_units": 1000,
+            "model_format": "OpenAI",
+            "model_name": "gpt-5.6-sol",
+            "model_version": "2026-07-09",
+            "name": "gpt-5.6-sol",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.DefaultV2",
+            "sku_name": "GlobalStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "responses",
+            "api_path": "/responses",
+            "auth_resource": "https://ai.azure.com",
+            "backend_id": "model-f914828b09a2f829",
+            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "capacity_tpm": 1000000,
+            "capacity_units": 1000,
+            "model_format": "OpenAI",
+            "model_name": "gpt-5.6-terra",
+            "model_version": "2026-07-09",
+            "name": "gpt-5.6-terra",
+            "project_resource": null,
+            "rai_policy_name": "Microsoft.DefaultV2",
+            "sku_name": "GlobalStandard",
+            "source": "gateway-managed"
+          }
+        ],
+        "schema_version": 1,
+        "generated_at": "2026-08-27T02:26:42.952Z"
+      };
+    </script>
+    <!-- END_TERRAFORM_CATALOG -->
+  <script>
+    window.__WORKBOOK_DATA__ = {"한눈에_보기":[["Client × 인증 × 모델 API 한눈에 보기",null,null,null,null,null,null,null],["가정: GPT 5.6 family는 Responses, FW-Kimi/GLM은 Chat Completions. 현재 APIM은 /responses와 /chat/completions만 제공하며 Anthropic /v1/messages는 제공하지 않습니다.",null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],["Client","인증","GPT 5.6 family 호출","FW-Kimi-K3 / FW-GLM-5.2 호출","Client 인증 전달","추가 프록시","현재 지원 상태","핵심 설정"],["OpenCode","OIDC 사용자","POST /openai/v1/responses\ngpt-5.6-sol/terra/luna","POST /openai/v1/chat/completions\nFW-Kimi-K3 / FW-GLM-5.2","Keycloak Device Flow hook → Authorization Bearer","불필요","직접 지원","GPT: @ai-sdk/openai\nFW: @ai-sdk/openai-compatible"],["OpenCode","서비스 계정","POST /service/openai/v1/responses","POST /service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\napiKey=unused는 SDK 초기화용","불필요","직접 지원","서비스 전용 opencode.json + OPENCODE_CONFIG + --pure"],["Codex CLI","OIDC 사용자","POST /openai/v1/responses","Responses wire만 사용하므로 FW 직접 호출 불가","auth.command → Keycloak Bearer token","GPT: 불필요\nFW: 필수","GPT 직접 지원 / FW 프록시 필요","wire_api=responses; FW는 Responses↔Chat translator 필요"],["Codex CLI","서비스 계정","POST /service/openai/v1/responses","Responses wire만 사용하므로 FW 직접 호출 불가","env_http_headers → Ocp-Apim-Subscription-Key","GPT: 불필요\nFW: 필수","GPT 직접 지원 / FW 프록시 필요","requires_openai_auth=false; tool/stream event 변환 검증 필요"],["Claude Code","OIDC 사용자","Client /v1/messages → Proxy → APIM /openai/v1/responses","Client /v1/messages → Proxy → APIM /openai/v1/chat/completions","권장 apiKeyHelper → 회전 Keycloak token; proxy가 Bearer를 APIM으로 전달","필수","현재 미지원 / 프록시 구현 후 지원","Anthropic Messages↔Responses/Chat 양방향 streaming translator"],["Claude Code","서비스 계정","Client /v1/messages → Proxy → APIM /service/openai/v1/responses","Client /v1/messages → Proxy → APIM /service/openai/v1/chat/completions","Proxy-issued credential; proxy가 APIM subscription key를 server-side 주입","필수","현재 미지원 / 프록시 구현 후 지원","ANTHROPIC_BASE_URL은 proxy; APIM key는 client에 직접 노출하지 않음"]],"호출_매트릭스":[["상세 호출 매트릭스",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],["모든 모델은 body.model의 정확한 client-facing deployment 이름으로 라우팅됩니다. 실제 routed_models 이름이 다르면 표의 모델명을 해당 값으로 교체해야 합니다.",null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],["Client","인증","모델","모델 API","Client → 첫 Hop 요청","첫 Hop Base URL","Client Credential / Header","Translator Proxy","Proxy 변환","APIM 최종 Endpoint","APIM 인증","APIM → Backend","APIM 정규화 요약","주요 Body 파라미터","지원 상태","운영 메모"],["OpenCode","OIDC 사용자","gpt-5.6-sol","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/openai/v1","Hook → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","OIDC 사용자","gpt-5.6-terra","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/openai/v1","Hook → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","OIDC 사용자","gpt-5.6-luna","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/openai/v1","Hook → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","OIDC 사용자","FW-Kimi-K3","Chat Completions","POST /chat/completions\nprovider=@ai-sdk/openai-compatible","https://<apim>/openai/v1","Hook → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","max_tokens → max_completion_tokens; stream이면 include_usage=true","model, messages, stream, max_tokens/max_completion_tokens, tools, tool_choice, temperature, top_p","직접 지원","FW는 chat provider; Responses 전용 reasoning option 미사용"],["OpenCode","OIDC 사용자","FW-GLM-5.2","Chat Completions","POST /chat/completions\nprovider=@ai-sdk/openai-compatible","https://<apim>/openai/v1","Hook → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","max_tokens → max_completion_tokens; stream이면 include_usage=true","model, messages, stream, max_tokens/max_completion_tokens, tools, tool_choice, temperature, top_p","직접 지원","FW는 chat provider; Responses 전용 reasoning option 미사용"],["OpenCode","서비스 계정","gpt-5.6-sol","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/service/openai/v1","Ocp-Apim-Subscription-Key\n(apiKey=unused)","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","서비스 계정","gpt-5.6-terra","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/service/openai/v1","Ocp-Apim-Subscription-Key\n(apiKey=unused)","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","서비스 계정","gpt-5.6-luna","Responses","POST /responses\nprovider=@ai-sdk/openai","https://<apim>/service/openai/v1","Ocp-Apim-Subscription-Key\n(apiKey=unused)","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 누락/공백 → message","model, input, stream, max_output_tokens, tools, tool_choice, reasoning, text, store, include","직접 지원","Hook defaults: reasoning=high, summary=auto, verbosity=low, store=true, encrypted reasoning include"],["OpenCode","서비스 계정","FW-Kimi-K3","Chat Completions","POST /chat/completions\nprovider=@ai-sdk/openai-compatible","https://<apim>/service/openai/v1","Ocp-Apim-Subscription-Key\n(apiKey=unused)","불필요","없음","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","max_tokens → max_completion_tokens; stream이면 include_usage=true","model, messages, stream, max_tokens/max_completion_tokens, tools, tool_choice, temperature, top_p","직접 지원","FW는 chat provider; Responses 전용 reasoning option 미사용"],["OpenCode","서비스 계정","FW-GLM-5.2","Chat Completions","POST /chat/completions\nprovider=@ai-sdk/openai-compatible","https://<apim>/service/openai/v1","Ocp-Apim-Subscription-Key\n(apiKey=unused)","불필요","없음","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","max_tokens → max_completion_tokens; stream이면 include_usage=true","model, messages, stream, max_tokens/max_completion_tokens, tools, tool_choice, temperature, top_p","직접 지원","FW는 chat provider; Responses 전용 reasoning option 미사용"],["Codex CLI","OIDC 사용자","gpt-5.6-sol","Responses","POST /responses\nwire_api=responses","https://<apim>/openai/v1","auth.command → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","OIDC 사용자","gpt-5.6-terra","Responses","POST /responses\nwire_api=responses","https://<apim>/openai/v1","auth.command → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","OIDC 사용자","gpt-5.6-luna","Responses","POST /responses\nwire_api=responses","https://<apim>/openai/v1","auth.command → Authorization Bearer","불필요","없음","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","OIDC 사용자","FW-Kimi-K3","Chat Completions","POST /responses\nwire_api=responses","https://<responses-chat-translator>/openai/v1","auth.command → Authorization Bearer","필수","Responses request/event stream ↔ Chat request/SSE\nTool call, reasoning item, usage event 변환","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 Chat max_tokens/stream usage 규칙","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","현재 미지원 / 프록시 구현 후 지원","단순 field rename 불가; Codex agent loop end-to-end 검증 필요"],["Codex CLI","OIDC 사용자","FW-GLM-5.2","Chat Completions","POST /responses\nwire_api=responses","https://<responses-chat-translator>/openai/v1","auth.command → Authorization Bearer","필수","Responses request/event stream ↔ Chat request/SSE\nTool call, reasoning item, usage event 변환","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 Chat max_tokens/stream usage 규칙","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","현재 미지원 / 프록시 구현 후 지원","단순 field rename 불가; Codex agent loop end-to-end 검증 필요"],["Codex CLI","서비스 계정","gpt-5.6-sol","Responses","POST /responses\nwire_api=responses","https://<apim>/service/openai/v1","env_http_headers → Ocp-Apim-Subscription-Key","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","서비스 계정","gpt-5.6-terra","Responses","POST /responses\nwire_api=responses","https://<apim>/service/openai/v1","env_http_headers → Ocp-Apim-Subscription-Key","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","서비스 계정","gpt-5.6-luna","Responses","POST /responses\nwire_api=responses","https://<apim>/service/openai/v1","env_http_headers → Ocp-Apim-Subscription-Key","불필요","없음","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","stream_options 삭제; role 기반 input type 보정","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","직접 지원","Codex는 Responses API만 사용; GPT 5.6 family에 적합"],["Codex CLI","서비스 계정","FW-Kimi-K3","Chat Completions","POST /responses\nwire_api=responses","https://<responses-chat-translator>/openai/v1","env_http_headers → Ocp-Apim-Subscription-Key","필수","Responses request/event stream ↔ Chat request/SSE\nTool call, reasoning item, usage event 변환","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 Chat max_tokens/stream usage 규칙","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","현재 미지원 / 프록시 구현 후 지원","단순 field rename 불가; Codex agent loop end-to-end 검증 필요"],["Codex CLI","서비스 계정","FW-GLM-5.2","Chat Completions","POST /responses\nwire_api=responses","https://<responses-chat-translator>/openai/v1","env_http_headers → Ocp-Apim-Subscription-Key","필수","Responses request/event stream ↔ Chat request/SSE\nTool call, reasoning item, usage event 변환","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 Chat max_tokens/stream usage 규칙","model, input, instructions, stream, tools, tool_choice, reasoning, text, store, include","현재 미지원 / 프록시 구현 후 지원","단순 field rename 불가; Codex agent loop end-to-end 검증 필요"],["Claude Code","OIDC 사용자","gpt-5.6-sol","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","apiKeyHelper → Keycloak token; proxy가 Bearer 전달","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","OIDC 사용자","gpt-5.6-terra","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","apiKeyHelper → Keycloak token; proxy가 Bearer 전달","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","OIDC 사용자","gpt-5.6-luna","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","apiKeyHelper → Keycloak token; proxy가 Bearer 전달","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/openai/v1/responses","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","OIDC 사용자","FW-Kimi-K3","Chat Completions","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","apiKeyHelper → Keycloak token; proxy가 Bearer 전달","필수","Anthropic Messages/SSE ↔ OpenAI Chat body/SSE\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 APIM Chat 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","OIDC 사용자","FW-GLM-5.2","Chat Completions","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","apiKeyHelper → Keycloak token; proxy가 Bearer 전달","필수","Anthropic Messages/SSE ↔ OpenAI Chat body/SSE\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/openai/v1/chat/completions","Authorization: Bearer <Keycloak token>\nvalidate-jwt: issuer/audience/scope/role","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 APIM Chat 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","서비스 계정","gpt-5.6-sol","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","Proxy-issued credential; proxy가 Ocp key 주입","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-sol' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","서비스 계정","gpt-5.6-terra","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","Proxy-issued credential; proxy가 Ocp key 주입","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-terra' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","서비스 계정","gpt-5.6-luna","Responses","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","Proxy-issued credential; proxy가 Ocp key 주입","필수","Anthropic Messages/SSE ↔ OpenAI Responses body/events\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/service/openai/v1/responses","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='gpt-5.6-luna' exact match → 모델별 backend\nAPIM MI로 Foundry Responses 호출","Proxy 출력 이후 APIM Responses 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","서비스 계정","FW-Kimi-K3","Chat Completions","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","Proxy-issued credential; proxy가 Ocp key 주입","필수","Anthropic Messages/SSE ↔ OpenAI Chat body/SSE\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-Kimi-K3' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 APIM Chat 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"],["Claude Code","서비스 계정","FW-GLM-5.2","Chat Completions","POST /v1/messages?beta=true\n선택: /v1/messages/count_tokens","https://<anthropic-format-translator>","Proxy-issued credential; proxy가 Ocp key 주입","필수","Anthropic Messages/SSE ↔ OpenAI Chat body/SSE\nsystem, content blocks, tools, thinking, stop, usage 변환","https://<apim>/service/openai/v1/chat/completions","Ocp-Apim-Subscription-Key\nAPI-scoped subscription_required=true","model='FW-GLM-5.2' exact match → 모델별 backend\nAPIM MI로 Foundry Chat Completions 호출","Proxy 출력 이후 APIM Chat 규칙","model, max_tokens(필수), messages, system, stream, tools, tool_choice, temperature, top_p, stop_sequences, thinking + anthropic-version/beta","현재 미지원 / 프록시 구현 후 지원","/v1/messages는 현재 APIM에 없음; SSE ping/stream 보존 필수"]],"요청_파라미터":[["요청 파라미터 및 변환",null,null,null,null,null,null,null,null,null,null],["APIM은 Responses와 Chat을 상호 변환하지 않으며 Anthropic Messages도 변환하지 않습니다. Proxy 변환은 별도 구현 범위입니다.",null,null,null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null,null,null],["Wire/API","사용 Client / 모델","Method / Path","필수 Body","주요 Agent·Tool 파라미터","Streaming","Client 기본값 / 특징","APIM 변경","Proxy가 추가로 변환할 항목","Backend 최종 형식","주의사항"],["OpenAI Responses","OpenCode / GPT 5.6","POST /responses","model, input","instructions, tools, tool_choice, parallel_tool_calls, reasoning, text, store, include, previous_response_id, max_output_tokens","stream=true; Responses SSE","reasoning high, summary auto, verbosity low, store=true, encrypted reasoning include","stream_options 삭제; role이 있는 input item type 누락/공백 → message","없음","Foundry Responses","server-side state/item_reference 사용 시 resource 간 failover 연속성 검증"],["OpenAI Responses","Codex CLI / GPT 5.6","POST /responses","model, input","instructions, tools, tool_choice, parallel_tool_calls, reasoning, text, store, include, max_output_tokens","stream=true; Responses SSE","wire_api=responses; tool/reasoning event 기반 agent loop","stream_options 삭제; input type 보정","없음","Foundry Responses","Codex는 Chat을 직접 선택하지 않음"],["Responses → Chat","Codex CLI / FW (proxy)","Client /responses → APIM /chat/completions","Client: model,input\nTarget: model,messages","Responses input/items/tools/reasoning → Chat messages/tools; output items ↔ choices/delta","Responses SSE ↔ Chat SSE","Codex가 Responses event와 tool lifecycle 기대","Proxy가 만든 Chat body에 max_tokens/stream usage 규칙","request + response + error + usage + tool events","Foundry Chat","가장 호환성 위험이 큼; reasoning/tool continuation 회귀 테스트 필수"],["OpenAI Chat Completions","OpenCode / FW-Kimi, FW-GLM","POST /chat/completions","model, messages","max_tokens/max_completion_tokens, tools, tool_choice, temperature, top_p, stop, response_format","stream=true; delta SSE","@ai-sdk/openai-compatible","max_tokens 복사/삭제; stream_options.include_usage=true","없음","Foundry Chat","tool calling/JSON/reasoning 지원은 모델별 확인"],["Anthropic Messages","Claude Code / 모든 모델","POST /v1/messages?beta=true","model, max_tokens, messages","system, tools, tool_choice, thinking, temperature, top_p, stop_sequences, metadata, content blocks","stream=true; Anthropic SSE + ping","anthropic-version=2023-06-01; anthropic-beta open list; session/agent headers","현재 경로 미등록 → 일반적으로 404","Anthropic body/header/SSE → target OpenAI wire","GPT→Responses; FW→Chat","count_tokens는 선택적; 없으면 inference endpoint로 계산"],["Messages → Responses","Claude Code / GPT 5.6 (proxy)","Proxy /v1/messages → APIM /responses","Messages: model,max_tokens,messages\nResponses: model,input","system→instructions/input; blocks→items; tool_use/result→tools/items; thinking→reasoning","Anthropic SSE ↔ Responses SSE","anthropic-version/beta 수용; session ID trace 가능","Proxy 출력 후 Responses 규칙","output_text/tool_call/reasoning/usage/stop을 Anthropic blocks로 복원","Foundry Responses","beta/header/body를 open list로 취급; 미지원 기능 정책 필요"],["Messages → Chat","Claude Code / FW (proxy)","Proxy /v1/messages → APIM /chat/completions","Messages: model,max_tokens,messages\nChat: model,messages","system→system message; text/tool blocks→messages/tools; max_tokens→max_completion_tokens","Anthropic SSE ↔ Chat SSE + ping","Claude Code는 thinking pause 중 ping 기대","Proxy 출력 후 Chat 규칙","delta/tool_calls/finish_reason/usage를 Anthropic events로 복원","Foundry Chat","FW tool schema/parallel tool/thinking 차이로 기능 저하 가능"]],"APIM_정규화":[["현재 APIM 정규화 및 라우팅 로직",null,null,null,null,null,null,null],["근거: policies/gateway.xml.tftpl. OIDC와 서비스 API는 인증만 다르고 body 정규화와 backend 라우팅은 동일합니다.",null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],["순서","Policy 단계","적용 API","입력","현재 처리","출력 / 오류","파라미터 영향","프록시와의 경계"],[1,"사용자 인증","OIDC /openai/v1/*","Authorization Bearer","validate-jwt: 서명, issuer, audience, scope, role","실패 401","Body 변경 없음","Proxy는 유효한 Keycloak Bearer token 전달"],[2,"서비스 인증","/service/openai/v1/*","Ocp subscription key","subscription_required=true가 policy 전 key 검증","실패 401","Body 변경 없음","Proxy가 key를 server-side secret으로 주입 권장"],[3,"Client credential 제거","모두","api-key, Ocp key, subscription-key query","세 credential 삭제","Foundry로 client credential 미전달","Header/query만 변경","Proxy credential과 APIM credential 분리"],[4,"호출자·모델 추적","모두","OIDC iss:sub 또는 subscription ID; body.model","해시 userId, userLabel, requestedModel trace","invalid JSON/model 누락 구분","model 문자열 필수","Claude session/agent ID는 현재 별도 기록 안 함"],[5,"기본 검증","모두","JSON body, model","JSON parse와 model 공백 검사","400 invalid JSON / model required","model 필수","Proxy target body에 exact model 필요"],[6,"Allowlist·backend 선택","모두","body.model","Terraform backend map exact match","미지원 모델 403","alias/prefix match 없음","Claude alias는 proxy가 deployment 이름으로 매핑"],[7,"Chat max token","/chat/completions","max_tokens, max_completion_tokens","max_completion_tokens 없으면 복사 후 max_tokens 삭제","Backend에는 max_completion_tokens","둘 다 있으면 기존 max_completion_tokens 우선","Anthropic max_tokens는 proxy가 먼저 변환"],[8,"Chat streaming usage","/chat/completions","stream, stream_options","stream=true이면 include_usage=true 강제","최종 usage chunk 활성화","기존 stream_options 보존","Proxy가 usage를 target client event로 변환"],[9,"Responses field 제거","/responses","stream_options","항상 삭제","Backend body에서 제외","stream은 유지","Proxy는 Responses SSE 수용"],[10,"Responses input 보정","/responses","input[].role/type","role 있고 type 누락/공백이면 type=message","Foundry schema 호환","그 외 item 변경 없음","Proxy 생성 item에도 적용"],[11,"Token limit","user_tokens_per_minute>0","userId:model counter","llm-token-limit; 현재 0이면 policy 미생성","초과 429 + Retry-After","stream은 token 추정","Proxy/APIM/Foundry retry를 단일 budget으로 제한"],[12,"Backend 선택","모두","backendId","set-backend-service","모델별 Foundry endpoint","operation suffix 유지","Proxy가 target operation 선택; APIM은 protocol 재선택 안 함"],[13,"Managed Identity","모두","backendAuthResource","APIM MI token 후 Authorization override","cognitiveservices 또는 ai.azure.com audience","Client Bearer는 backend 미전달","Proxy에 Foundry credential 불필요"],[14,"Forward","모두","정규화 body/header","timeout=300, fail-on-error=false, buffer-response=false","SSE 비버퍼링","Response schema 변환 없음","모든 protocol response 변환은 proxy 책임"],[15,"미지원 경로","/v1/messages, /models, /responses/compact","등록되지 않은 operation","Policy 대상 아님","일반적으로 404","변환 없음","Claude /v1/messages translator 필수"]],"APIM_백엔드":[["APIM Backend 및 Endpoint 구조",null,null,null,null,null,null,null,null],["대상: apim-claudegw-dev-eus2-015pnu | 모델별 Backend, 실제 대상 URL, 인증 및 Circuit Breaker 구성",null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null],["모델","APIM Backend ID","Endpoint 유형","Backend Base URL","API 형식","Entra 토큰 대상","APIM RBAC","429 Circuit Breaker","역할 / 비고"],["FW-DeepSeek-V4-Flash-0731","model-dce548823a480bcd","Foundry Project","https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1","Chat Completions","https://ai.azure.com","Foundry User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","codexproj 배포를 body.model로 선택"],["FW-GLM-5.2-Fast","model-10123690200035e8","Foundry Project","https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1","Chat Completions","https://ai.azure.com","Foundry User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","codexproj 배포를 body.model로 선택"],["FW-Kimi-K3","model-6878138e52a83205","Foundry Project","https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1","Chat Completions","https://ai.azure.com","Foundry User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","codexproj 배포를 body.model로 선택"],["gpt-5.4","model-6641e7fabcf708a0","Azure OpenAI","https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1","Responses","https://cognitiveservices.azure.com","Cognitive Services OpenAI User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","Terraform 관리 GlobalStandard 배포; capacity 3000"],["gpt-5.4-mini","model-9d61afd2b9f51580","Azure OpenAI","https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1","Responses","https://cognitiveservices.azure.com","Cognitive Services OpenAI User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","Terraform 관리 GlobalStandard 배포; capacity 3000"],["gpt-5.6-sol","model-6b6cb90c15788bb2","Foundry Project","https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1","Responses","https://ai.azure.com","Foundry User","1분 내 429 50회 → 기본 10초 Open; Retry-After 수용","codexproj 배포를 body.model로 선택"],[null,null,null,null,null,null,null,null,null],["Project endpoint와 Azure OpenAI endpoint 비교",null,null,null,null,null,null,null,null],["비교 항목","Project endpoint","Azure OpenAI endpoint",null,null,null,null,null,null],["현재 URL","https://aisproj-c0gvf2.services.ai.azure.com/api/projects/codexproj/openai/v1","https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",null,null,null,null,null,null],["현재 연결 모델","gpt-5.6-sol, FW-DeepSeek-V4-Flash-0731, FW-GLM-5.2-Fast, FW-Kimi-K3","gpt-5.4, gpt-5.4-mini",null,null,null,null,null,null],["범위","codexproj 프로젝트에 연결된 모델과 Foundry 기능","해당 Azure OpenAI 리소스에 배포된 모델",null,null,null,null,null,null],["핵심 기능","모델 추론 + Agents, evaluations, Foundry tools 등 프로젝트 기능","OpenAI 호환 모델 추론, embeddings 등 직접 API",null,null,null,null,null,null],["호환성 / 경로","Foundry project routing 계층; /openai 경로 제공","OpenAI SDK 호환성과 직접 추론 경로에 적합",null,null,null,null,null,null],["모델 선택","요청 body.model로 프로젝트 내 배포 선택","요청 body.model로 리소스 내 배포 선택",null,null,null,null,null,null],["Entra 인증","Audience: https://ai.azure.com","Audience: https://cognitiveservices.azure.com",null,null,null,null,null,null],["현재 APIM 권한","Foundry User (project scope)","Cognitive Services OpenAI User (resource scope)",null,null,null,null,null,null],["선택 기준","Model Catalog/OSS 모델 또는 Foundry 프로젝트 기능이 필요할 때","순수 Responses/Chat 호출과 최대 OpenAI 호환성이 중요할 때",null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null],["운영 관점 핵심 해석",null,null,null,null,null,null,null,null],["• APIM Backend 객체는 6개지만 실제 Backend Base URL은 2개입니다.",null,null,null,null,null,null,null,null],["• 모델별 Backend 분리는 429 Circuit Breaker 상태를 모델별로 격리하기 위한 구성입니다.",null,null,null,null,null,null,null,null],["• 현재는 Backend Pool이 없으므로 Circuit Breaker가 열려도 다른 지역이나 endpoint로 자동 failover되지 않습니다.",null,null,null,null,null,null,null,null],["• Project endpoint 또는 Azure OpenAI endpoint를 선택하는 것만으로 TPM이 증가하지 않으며, quota와 처리량은 실제 모델 배포에 귀속됩니다.",null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null,null],["공식 문서 및 구성 근거",null,null,null,null,null,null,null,null],["Microsoft Foundry SDKs and endpoints","https://learn.microsoft.com/azure/foundry/how-to/develop/sdk-overview",null,null,null,null,null,null,null],["Azure API Management backends","https://learn.microsoft.com/azure/api-management/backends",null,null,null,null,null,null,null],["Repository configuration","infra/terraform.tfvars, infra/locals.tf, infra/main.tf, policies/gateway.xml.tftpl",null,null,null,null,null,null,null]],"소스_가정":[["근거 자료 및 적용 가정",null,null,null,null,null],["Azure는 Microsoft Learn 공식 문서, Claude Code/Anthropic은 Anthropic 공식 문서를 사용했습니다.",null,null,null,null,null],[null,null,null,null,null,null],[null,null,null,null,null,null],["구분","Source","참조 내용","URL / 경로","확인일","비고"],["저장소","README.md","지원 API와 OpenCode/Codex OIDC·서비스 설정","README.md","2026-08-24","현재 gateway 사용자 계약"],["저장소","APIM policy","검증, 라우팅, 정규화, MI, streaming","policies/gateway.xml.tftpl","2026-08-24","현재 정책 source of truth"],["저장소","OpenCode hook","Provider 분리, Responses defaults, OIDC header","scripts/keycloak/opencode-keycloak-hook.js","2026-08-24","OIDC 사용자 경로"],["Microsoft Learn","Managed identity policy","APIM MI token과 Authorization 설정","https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy","2026-08-24","공식"],["Microsoft Learn","Set backend service","모델별 backend 선택","https://learn.microsoft.com/azure/api-management/set-backend-service-policy","2026-08-24","공식"],["Microsoft Learn","LLM token limit","지원 schema와 streaming token 추정","https://learn.microsoft.com/azure/api-management/llm-token-limit-policy","2026-08-24","공식"],["Microsoft Learn","Azure OpenAI Responses","Responses API","https://learn.microsoft.com/azure/ai-foundry/openai/how-to/responses","2026-08-24","공식"],["Microsoft Learn","Azure OpenAI Chat","Chat Completions","https://learn.microsoft.com/azure/ai-foundry/openai/how-to/chatgpt","2026-08-24","공식"],["Anthropic","Claude gateway protocol","Endpoints, headers, streaming, bridge responsibility","https://code.claude.com/docs/en/llm-gateway-protocol","2026-08-24","공식"],["Anthropic","Claude gateway connect","Base URL, credential, apiKeyHelper","https://code.claude.com/docs/en/llm-gateway-connect","2026-08-24","공식"],["Anthropic","Messages API","POST /v1/messages와 parameters","https://platform.claude.com/docs/en/api/messages","2026-08-24","공식"],["OpenAI","Codex custom providers","base_url, wire_api=responses","https://developers.openai.com/codex/config-advanced/#custom-model-providers","2026-08-24","README 참조"],["OpenCode","Provider config","OpenAI/OpenAI-compatible providers","https://opencode.ai/docs/providers/","2026-08-24","README 참조"],["가정","GPT 5.6 family","sol/terra/luna는 Responses API","사용자 요청 + README 예시","2026-08-24","실제 opencode_api 확인 필요"],["가정","FW models","Kimi-K3와 GLM-5.2는 Chat Completions","사용자 요청 + README 패턴","2026-08-24","exact routed model 이름 확인"],["가정","Claude Code non-Claude routing","기술 bridge는 가능하나 Anthropic은 gateway를 통한 non-Claude model routing을 공식 지원하지 않음","https://code.claude.com/docs/en/llm-gateway","2026-08-24","vendor support와 기술 호환성 별도 판단"]]};
+  </script>
+  <script>
+    const workbook = window.__WORKBOOK_DATA__;
+    const terraformCatalog = window.__TERRAFORM_CATALOG__ || {};
+    const views = ["catalog", "hooks", "routes", "parameters", "policy", "backends", "sources"];
+    const state = {
+      view: views.includes(location.hash.slice(1)) ? location.hash.slice(1) : "catalog",
+      query: "",
+      filters: { client: "전체", auth: "전체", api: "전체", proxy: "전체" }
+    };
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+    const renderText = (value) => escapeHtml(value).replaceAll("\n", "<br>");
+    const normalize = (value) => String(value ?? "").toLocaleLowerCase("ko");
+    const isUrl = (value) => /^https?:\/\//i.test(String(value ?? "").trim());
+    const matchesQuery = (row) => !state.query || Object.values(row).some((value) => normalize(value).includes(state.query));
+
+    function tableData(sheetName, headerIndex = 4, endExclusive) {
+      const rows = workbook[sheetName] || [];
+      const headers = (rows[headerIndex] || []).filter((header) => header !== null && header !== "");
+      const source = rows.slice(headerIndex + 1, endExclusive);
+      const items = source
+        .filter((row) => row.some((value) => value !== null && value !== ""))
+        .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])));
+      return {
+        title: rows[0]?.[0] || sheetName,
+        intro: rows[1]?.[0] || "",
+        headers,
+        items
+      };
+    }
+
+    function catalogBackends(staticData, catalog) {
+      if (!Array.isArray(catalog.models) || !catalog.models.length) return staticData;
+      const headers = [
+        "모델",
+        "APIM Backend ID",
+        "Endpoint 유형",
+        "Backend Base URL",
+        "API 형식",
+        "Entra 토큰 대상",
+        "APIM RBAC",
+        "429 Circuit Breaker",
+        "역할 / 비고"
+      ];
+      return {
+        title: "APIM Backend 및 Endpoint 구조",
+        intro: `${catalog.gateway.name} · Terraform-routed model과 실제 Backend 구성`,
+        headers,
+        items: catalog.models.map((model) => ({
+          "모델": model.name,
+          "APIM Backend ID": model.backend_id,
+          "Endpoint 유형": model.source === "gateway-managed" ? "Gateway Foundry Account" : "Foundry Project",
+          "Backend Base URL": model.backend_url,
+          "API 형식": model.api === "responses" ? "Responses" : "Chat Completions",
+          "Entra 토큰 대상": model.auth_resource,
+          "APIM RBAC": catalog.backend_identity?.role || "",
+          "429 Circuit Breaker": "1분 내 429 50회 → 기본 10초 Open; Retry-After 수용",
+          "역할 / 비고": model.source === "gateway-managed"
+            ? `${model.model_format} ${model.model_version} · ${model.sku_name} capacity ${model.capacity_units}`
+            : `External project deployment · ${model.capacity_tpm} TPM`
+        }))
+      };
+    }
+
+    function catalogCalls(staticData, catalog) {
+      if (!Array.isArray(catalog.models) || !catalog.models.length) return staticData;
+      const oidcBaseUrl = catalog.gateway?.oidc_base_url || "https://<apim>/openai/v1";
+      const serviceBaseUrl = catalog.gateway?.service_base_url || "https://<apim>/service/openai/v1";
+      const clientAuthPairs = [];
+      const seenPairs = new Set();
+      for (const item of staticData.items) {
+        const key = `${item["Client"]}\u0000${item["인증"]}`;
+        if (!seenPairs.has(key)) {
+          seenPairs.add(key);
+          clientAuthPairs.push([item["Client"], item["인증"]]);
+        }
+      }
+
+      const items = clientAuthPairs.flatMap(([client, auth]) =>
+        catalog.models.flatMap((model) => {
+          const api = model.api === "responses" ? "Responses" : "Chat Completions";
+          const template = staticData.items.find((item) =>
+            item["Client"] === client && item["인증"] === auth && item["모델 API"] === api
+          );
+          if (!template) return [];
+          const templateModel = template["모델"];
+          const row = Object.fromEntries(staticData.headers.map((header) => {
+            const value = template[header] ?? "";
+            const renderedValue = typeof value === "string"
+              ? value
+                  .replaceAll("https://<apim>/service/openai/v1", serviceBaseUrl)
+                  .replaceAll("https://<apim>/openai/v1", oidcBaseUrl)
+              : value;
+            return [
+              header,
+              typeof renderedValue === "string" && templateModel
+                ? renderedValue.replaceAll(templateModel, model.name)
+                : renderedValue
+            ];
+          }));
+          row["모델"] = model.name;
+          return [row];
+        })
+      );
+      return { ...staticData, items };
+    }
+
+    function catalogEndpointComparison(staticData, catalog) {
+      if (!Array.isArray(catalog.models) || !catalog.models.length) return staticData;
+      const projectModels = catalog.models.filter((model) => model.source === "external-project");
+      const gatewayModels = catalog.models.filter((model) => model.source === "gateway-managed");
+      const projectUrls = [...new Set(projectModels.map((model) => model.backend_url))];
+      const gatewayUrls = [...new Set(gatewayModels.map((model) => model.backend_url))];
+      const audience = catalog.backend_identity?.audience || "";
+      const role = catalog.backend_identity?.role || "";
+
+      const items = staticData.items.map((item) => {
+        const row = { ...item };
+        if (row["비교 항목"] === "현재 URL") {
+          row["Project endpoint"] = projectUrls.join("\n") || "미사용";
+          row["Azure OpenAI endpoint"] = gatewayUrls.join("\n") || "미사용";
+        } else if (row["비교 항목"] === "현재 연결 모델") {
+          row["Project endpoint"] = projectModels.map((model) => model.name).join(", ") || "없음";
+          row["Azure OpenAI endpoint"] = gatewayModels.map((model) => model.name).join(", ") || "없음";
+        } else if (row["비교 항목"] === "Entra 인증") {
+          row["Project endpoint"] = `Audience: ${audience}`;
+          row["Azure OpenAI endpoint"] = `Audience: ${audience}`;
+        } else if (row["비교 항목"] === "현재 APIM 권한") {
+          row["Project endpoint"] = projectModels.length ? "Foundry User (project scope)" : "미사용";
+          row["Azure OpenAI endpoint"] = `${role} (resource scope)`;
+        }
+        return row;
+      });
+      return { ...staticData, items };
+    }
+
+    const summary = tableData("한눈에_보기");
+    if (Array.isArray(terraformCatalog.models) && terraformCatalog.models.length) {
+      const chatModels = terraformCatalog.models
+        .filter((model) => model.api === "chat")
+        .map((model) => model.name)
+        .join(" / ");
+      summary.intro = `현재 routed model ${terraformCatalog.models.length}개는 Terraform api_catalog_manifest에서 자동 반영됩니다.`;
+      summary.items = summary.items.map((item) => Object.fromEntries(
+        Object.entries(item).map(([key, value]) => [
+          key,
+          typeof value === "string" && chatModels
+            ? value.replaceAll("FW-Kimi-K3 / FW-GLM-5.2", chatModels)
+            : value
+        ])
+      ));
+    }
+    const calls = catalogCalls(tableData("호출_매트릭스"), terraformCatalog);
+    const parameters = tableData("요청_파라미터");
+    const policy = tableData("APIM_정규화");
+    const policyReasonByStage = {
+      "Chat max token": "OpenCode와 OpenAI-compatible SDK 일부가 보내는 legacy max_tokens를 최신 Chat API와 추론 모델이 사용하는 max_completion_tokens 형식으로 맞춰 parameter 오류와 출력 한도 오해를 방지합니다.",
+      "Chat streaming usage": "Chat streaming은 include_usage=true일 때 최종 SSE chunk에 전체 token usage가 포함됩니다. APIM GatewayLlmLogs와 운영 Workbook의 TPM·비용·사용자별 집계를 유지하기 위해 필요합니다.",
+      "Responses field 제거": "stream_options는 Chat Completions 전용입니다. Responses API는 stream=true와 Responses event 형식을 사용하므로 unsupported parameter로 인한 HTTP 400을 방지하기 위해 제거합니다.",
+      "Responses input 보정": "OpenCode가 role 기반 input item의 type을 누락하거나 빈 문자열로 보내는 경우가 있어, Foundry Responses의 명시적 message item 형식에 맞춰 schema 검증 실패와 agent loop 중단을 방지합니다."
+    };
+    policy.headers = [...policy.headers, "필요한 이유"];
+    policy.items = policy.items.map((item) => ({
+      ...item,
+      "필요한 이유": policyReasonByStage[item["Policy 단계"]] || ""
+    }));
+    const sources = tableData("소스_가정");
+    const backends = catalogBackends(tableData("APIM_백엔드", 4, 11), terraformCatalog);
+    const endpointComparison = catalogEndpointComparison(
+      tableData("APIM_백엔드", 13, 23),
+      terraformCatalog
+    );
+    const backendSheet = workbook["APIM_백엔드"] || [];
+    const staticBackendNotes = backendSheet.slice(25, 29).map((row) => row[0]).filter(Boolean);
+    const backendNotes = Array.isArray(terraformCatalog.models) && terraformCatalog.models.length
+      ? [
+          `• APIM Backend 객체는 ${terraformCatalog.models.length}개이며 실제 Backend Base URL은 ${
+            new Set(terraformCatalog.models.map((model) => model.backend_url)).size
+          }개입니다.`,
+          "• 모델별 Backend 분리는 429 Circuit Breaker 상태를 모델별로 격리하기 위한 구성입니다.",
+          "• 현재는 Backend Pool이 없으므로 Circuit Breaker가 열려도 다른 지역이나 endpoint로 자동 failover되지 않습니다.",
+          "• Endpoint를 추가하는 것만으로 TPM이 증가하지 않으며 quota와 처리량은 실제 모델 deployment에 귀속됩니다."
+        ]
+      : staticBackendNotes;
+    const backendRefs = [
+      {
+        label: "Microsoft Learn · APIM Backends와 Circuit Breaker",
+        value: "https://learn.microsoft.com/azure/api-management/backends"
+      },
+      {
+        label: "Microsoft Learn · set-backend-service 정책",
+        value: "https://learn.microsoft.com/azure/api-management/set-backend-service-policy"
+      },
+      ...backendSheet.slice(31, 34)
+        .filter((row) => row[0] || row[1])
+        .map((row) => ({ label: row[0], value: row[1] }))
+    ].filter((ref, index, refs) =>
+      refs.findIndex((candidate) => candidate.value === ref.value) === index
+    );
+
+    const gatewayName = terraformCatalog.gateway?.name;
+    if (gatewayName) {
+      document.getElementById("gateway-name").textContent = gatewayName;
+      document.getElementById("gateway-selector").textContent = `${gatewayName} ▾`;
+    }
+    if (terraformCatalog.generated_at) {
+      const generatedAt = new Date(terraformCatalog.generated_at).toLocaleString("ko-KR");
+      document.getElementById("catalog-generated-at").textContent =
+        `Catalog generated ${generatedAt} · Terraform과 APIM policy가 source of truth`;
+    }
+
+    function badgeClass(value) {
+      const text = normalize(value);
+      if (text.includes("직접 지원") && !text.includes("미지원")) return "success";
+      if (text.includes("필수") || text.includes("proxy") || text.includes("프록시")) return "warning";
+      if (text.includes("미지원") || text.includes("불가")) return "danger";
+      return "";
+    }
+
+    function badge(value, className = "") {
+      return `<span class="badge ${className}">${renderText(value)}</span>`;
+    }
+
+    function facts(row, exclude = []) {
+      return `<dl class="facts">${Object.entries(row)
+        .filter(([key, value]) => !exclude.includes(key) && value !== null && value !== "")
+        .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${renderText(value)}</dd>`)
+        .join("")}</dl>`;
+    }
+
+    function sectionHeading(title, intro, count) {
+      return `
+        <div class="section-heading">
+          <div>
+            <h2>${escapeHtml(title)}</h2>
+            <p>${renderText(intro)}</p>
+          </div>
+          ${count === undefined ? "" : `<span class="result-count">${count}개 항목</span>`}
+        </div>`;
+    }
+
+    function emptyState() {
+      return `<div class="empty">현재 검색 조건과 일치하는 항목이 없습니다.</div>`;
+    }
+
+    function dataTable(dataset, items = dataset.items, title = "전체 데이터") {
+      if (!items.length) return emptyState();
+      return `
+        <div class="card table-card">
+          <header>
+            <h3>${escapeHtml(title)}</h3>
+            <p>현재 카탈로그의 모든 열을 확인할 수 있습니다.</p>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>${dataset.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+              <tbody>
+                ${items.map((row) => `<tr>${dataset.headers.map((header) => {
+                  const value = row[header] ?? "";
+                  const cell = isUrl(value)
+                    ? `<a href="${escapeHtml(value)}" target="_blank" rel="noreferrer">${renderText(value)}</a>`
+                    : renderText(value);
+                  return `<td>${cell}</td>`;
+                }).join("")}</tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    function endpointCard(method, path, auth, description) {
+      const gatewayOrigin = terraformCatalog.gateway?.oidc_base_url
+        ?.replace(/\/openai\/v1\/?$/, "") || "https://apim-claudegw-dev-eus2-015pnu.azure-api.net";
+      return `
+        <article class="card">
+          <div class="card-header">
+            <div class="product-icon">API</div>
+            <div class="card-title">
+              <h3><span class="method">${method}</span>${path}</h3>
+              <p>${description}</p>
+            </div>
+            ${badge(auth, "accent")}
+          </div>
+          <div class="endpoint">${method} ${gatewayOrigin}${path}</div>
+        </article>`;
+    }
+
+    function modelCard(row) {
+      const model = row["모델"];
+      const endpointType = row["Endpoint 유형"];
+      const api = row["API 형식"];
+      return `
+        <article class="card model-card">
+          <div class="card-header">
+            <div class="product-icon">${model.startsWith("FW-") ? "FW" : "GPT"}</div>
+            <div class="card-title">
+              <h3>${escapeHtml(model)}</h3>
+              <p>${escapeHtml(row["APIM Backend ID"])}</p>
+            </div>
+            <div class="badge-row">
+              ${badge(api, "accent")}
+              ${badge(endpointType)}
+            </div>
+          </div>
+          <div class="endpoint">${renderText(row["Backend Base URL"])}</div>
+          ${facts(row, ["모델", "APIM Backend ID", "Endpoint 유형", "Backend Base URL", "API 형식"])}
+        </article>`;
+    }
+
+    function clientCard(row) {
+      const status = row["현재 지원 상태"];
+      return `
+        <article class="card">
+          <div class="card-header">
+            <div class="product-icon">${escapeHtml(row["Client"].split(/\s+/).map((part) => part[0]).join("").slice(0, 3).toUpperCase())}</div>
+            <div class="card-title">
+              <h3>${escapeHtml(row["Client"])}</h3>
+              <p>${escapeHtml(row["인증"])}</p>
+            </div>
+            ${badge(status, badgeClass(status))}
+          </div>
+          <div class="badge-row">
+            ${badge(`Proxy: ${row["추가 프록시"]}`, badgeClass(row["추가 프록시"]))}
+          </div>
+          <details>
+            <summary>호출 방법과 설정 보기</summary>
+            ${facts(row, ["Client", "인증", "현재 지원 상태"])}
+          </details>
+        </article>`;
+    }
+
+    function renderCatalog() {
+      const modelRows = backends.items.filter(matchesQuery);
+      const clientRows = summary.items.filter(matchesQuery);
+      const total = modelRows.length + clientRows.length;
+      return `
+        ${sectionHeading("API 카탈로그", summary.intro, total)}
+        <div class="grid two">
+          ${endpointCard("POST", "/openai/v1/responses", "OIDC", "GPT Responses API · Keycloak Bearer")}
+          ${endpointCard("POST", "/openai/v1/chat/completions", "OIDC", "Foundry Chat Completions · Keycloak Bearer")}
+          ${endpointCard("POST", "/service/openai/v1/responses", "Service Account", "GPT Responses API · APIM subscription key")}
+          ${endpointCard("POST", "/service/openai/v1/chat/completions", "Service Account", "Foundry Chat Completions · APIM subscription key")}
+        </div>
+
+        ${sectionHeading("배포 모델", "APIM body.model 값과 Backend가 일대일로 매핑됩니다.", modelRows.length)}
+        <div class="grid three">${modelRows.length ? modelRows.map(modelCard).join("") : emptyState()}</div>
+
+        ${sectionHeading("Client 접근 방식", "클라이언트와 인증 방식에 따른 직접 지원 및 Translator Proxy 요구사항입니다.", clientRows.length)}
+        <div class="grid three">${clientRows.length ? clientRows.map(clientCard).join("") : emptyState()}</div>
+        ${dataTable(summary, clientRows, "한눈에 보기 · 전체 표")}
+      `;
+    }
+
+    function filterGroup(label, key, values) {
+      return `
+        <div class="filter-group">
+          <span class="filter-label">${escapeHtml(label)}</span>
+          <div class="filter-row">
+            ${["전체", ...values].map((value) => `
+              <button class="filter-chip ${state.filters[key] === value ? "active" : ""}"
+                      type="button" data-filter="${key}" data-value="${escapeHtml(value)}">${escapeHtml(value)}</button>
+            `).join("")}
+          </div>
+        </div>`;
+    }
+
+    const hookIntegrations = [
+      {
+        title: "OpenCode OIDC Hook",
+        subtitle: "실제 OpenCode plugin hook",
+        kind: "Hook",
+        source: "scripts/keycloak/opencode-keycloak-hook.js",
+        summary: "실행 시 provider와 모델을 구성하고, 각 gateway 요청 직전에 Keycloak Bearer token을 주입합니다.",
+        steps: [
+          ["설정 로드", "환경 변수 우선, 없으면 Terraform output"],
+          ["Provider 분리", "Responses=openai, Chat=foundry"],
+          ["모델 기본값", "default/small model과 reasoning 옵션 병합"],
+          ["Token 획득", "공유 cache → refresh → Device Flow"],
+          ["Header 주입", "chat.headers에서 Authorization 교체"]
+        ],
+        code: [
+          "openai/<model>   → @ai-sdk/openai → Responses API",
+          "foundry/<model>  → @ai-sdk/openai-compatible → Chat Completions",
+          "Authorization: Bearer <credential.getToken()>"
+        ].join("\n"),
+        details: {
+          "모델 목록": "LLMGW_OPENCODE_RESPONSES_MODELS / CHAT_MODELS가 있으면 우선 사용하고, 없으면 Terraform opencode_model_config를 읽음",
+          "중복 방지": "같은 모델이 Responses와 Chat provider 양쪽에 있으면 시작 단계에서 오류",
+          "Responses 기본값": "tool_call=true, systemMessageMode=system, reasoningEffort=high, reasoningSummary=auto, textVerbosity=low, store=true, encrypted reasoning include",
+          "Chat 보정": "GPT 모델을 foundry/chat provider에 둔 경우 Responses 전용 reasoning 옵션을 chat.params에서 제거",
+          "주입 범위": "provider ID가 openai/foundry이고 요청 baseURL이 gateway baseURL과 정확히 일치할 때만 Bearer 주입"
+        }
+      },
+      {
+        title: "OpenCode Service Account",
+        subtitle: "OIDC hook을 사용하지 않는 별도 실행 경로",
+        kind: "No Hook",
+        source: "opencode.json + OPENCODE_CONFIG",
+        summary: "서비스 전용 provider 설정이 APIM subscription key를 header로 직접 전달합니다.",
+        steps: [
+          ["별도 Config", "서비스 계정용 opencode.json"],
+          ["OIDC Plugin 비활성화", "--pure로 프로젝트 Keycloak hook 미로드"],
+          ["Provider 분리", "Responses와 Chat provider"],
+          ["Header 주입", "Ocp-Apim-Subscription-Key"],
+          ["APIM 호출", "/service/openai/v1"]
+        ],
+        code: [
+          "apiKey: \"unused\"  # SDK 초기화용",
+          "headers: { Ocp-Apim-Subscription-Key: \"{env:LLMGW_SUBSCRIPTION_KEY}\" }",
+          "opencode run --pure --model llmgw-responses/<model>"
+        ].join("\n"),
+        details: {
+          "인증 주체": "Keycloak 사용자가 아니라 APIM subscription",
+          "Responses provider": "@ai-sdk/openai",
+          "Chat provider": "@ai-sdk/openai-compatible",
+          "격리 이유": "프로젝트 opencode.json의 OIDC plugin이 서비스 호출에 개입하지 않도록 --pure 사용"
+        }
+      },
+      {
+        title: "Codex OIDC Command Credential",
+        subtitle: "Codex hook이 아니라 외부 token helper",
+        kind: "Auth Command",
+        source: "scripts/keycloak/keycloak-token.js",
+        summary: "Codex가 auth.command로 Node helper를 실행합니다. Device Flow가 필요하면 helper가 인증 URL을 기본 브라우저로 열고, 승인 후 stdout의 access token으로 Responses 요청을 계속합니다.",
+        steps: [
+          ["Codex 시작", "wire_api=responses"],
+          ["auth.command", "node keycloak-token.js --open-browser 실행"],
+          ["Token 획득", "OpenCode와 동일한 cache/refresh 로직"],
+          ["최초 로그인", "Device Flow URL을 기본 브라우저로 자동 실행"],
+          ["stdout 반환", "access token만 한 줄 출력"],
+          ["Codex 요청", "Bearer token으로 APIM Responses 호출"]
+        ],
+        code: [
+          "[model_providers.llmgw]",
+          "wire_api = \"responses\"",
+          "[model_providers.llmgw.auth]",
+          "command = \"node\"",
+          "args = [\".../scripts/keycloak/keycloak-token.js\", \"--open-browser\"]",
+          "timeout_ms = 600000",
+          "refresh_interval_ms = 240000"
+        ].join("\n"),
+        details: {
+          "중요 구분": "Codex 내부 요청 hook은 없음. command credential 인터페이스로 외부 helper를 호출",
+          "stderr 처리": "Codex는 auth.command의 stderr를 종료 전까지 캡처하므로 Device Flow 링크가 터미널에 실시간 표시되지 않음",
+          "브라우저 자동 실행": "--open-browser가 verification URL을 기본 브라우저로 열며 Codex는 승인 완료까지 대기",
+          "출력 규칙": "로그인 안내와 오류는 stderr, access token만 stdout; stdout에 다른 텍스트를 출력하면 인증 실패",
+          "후속 실행": "유효한 cache 또는 refresh token이 있으면 브라우저를 열지 않고 자동 갱신",
+          "공유 상태": "OpenCode hook과 ~/.llmgw/keycloak-token.json을 공유",
+          "프로토콜 제한": "Codex는 Responses wire만 사용하므로 Chat 전용 FW 모델은 translator proxy 없이는 직접 호출 불가"
+        }
+      },
+      {
+        title: "Codex Service Account",
+        subtitle: "Token helper 없이 APIM key 사용",
+        kind: "No Hook",
+        source: "~/.codex/service-account.config.toml",
+        summary: "requires_openai_auth=false로 OpenAI credential 요구를 끄고 환경 변수의 subscription key를 HTTP header로 매핑합니다.",
+        steps: [
+          ["Service Profile", "--profile service-account"],
+          ["OpenAI Auth 해제", "requires_openai_auth=false"],
+          ["환경 변수", "LLMGW_SUBSCRIPTION_KEY"],
+          ["Header 매핑", "env_http_headers"],
+          ["APIM 호출", "/service/openai/v1/responses"]
+        ],
+        code: [
+          "requires_openai_auth = false",
+          "[model_providers.llmgw_service.env_http_headers]",
+          "\"Ocp-Apim-Subscription-Key\" = \"LLMGW_SUBSCRIPTION_KEY\"",
+          "[shell_environment_policy.filters]",
+          "\"LLMGW_SUBSCRIPTION_KEY\" = \"exclude\""
+        ].join("\n"),
+        details: {
+          "인증": "Ocp-Apim-Subscription-Key",
+          "모델 API": "Responses 전용",
+          "비밀 보호": "shell_environment_policy에서 key 환경 변수를 제외하여 spawned shell/tool에 전달하지 않음",
+          "OIDC 관계": "OPENAI_API_KEY와 Keycloak token을 사용하지 않음"
+        }
+      }
+    ];
+
+    const sharedTokenFlow = {
+      title: "공유 Keycloak Device Credential",
+      source: "scripts/keycloak/keycloak-device-auth.js",
+      steps: [
+        ["Cache 읽기", "~/.llmgw/keycloak-token.json"],
+        ["유효성 검사", "만료 60초 이상 남으면 재사용"],
+        ["Refresh", "refresh_token으로 자동 갱신"],
+        ["경합 복구", "invalid_grant 시 회전된 cache 재로드"],
+        ["Device Flow", "refresh 불가할 때만 로그인; Codex helper는 --open-browser로 URL 자동 실행"]
+      ],
+      details: {
+        "Cache 식별": "discovery URL + client ID + scope의 SHA-256 cacheKey가 일치할 때만 token set 사용",
+        "파일 보호": "Windows는 icacls로 현재 사용자만 Full Control, Unix는 0600",
+        "원자적 저장": "PID 기반 임시 파일에 기록한 뒤 rename",
+        "동시 요청": "진행 중인 acquirePromise를 공유해 한 프로세스에서 중복 로그인/refresh 방지",
+        "Refresh 실패": "invalid_grant가 아니면 오류를 그대로 노출; invalid_grant면 다른 프로세스가 회전한 refresh token을 재확인"
+      }
+    };
+
+    function hookCard(item) {
+      const client = item.title.startsWith("OpenCode") ? "OpenCode" : "Codex";
+      const icon = client === "OpenCode" ? "OC" : "CX";
+      const kindClass = item.kind === "Hook" ? "accent" : item.kind === "Auth Command" ? "warning" : "";
+      return `
+        <article class="card hook-card">
+          <header class="hook-card-header">
+            <div class="product-icon">${escapeHtml(icon)}</div>
+            <div class="card-title">
+              <h3>${escapeHtml(item.title)}</h3>
+              <p>${escapeHtml(item.subtitle)}</p>
+            </div>
+            ${badge(item.kind, kindClass)}
+            <p class="hook-summary">${renderText(item.summary)}</p>
+            <p class="hook-source mono">설정 위치 · ${escapeHtml(item.source)}</p>
+          </header>
+          <div class="hook-card-body">
+            <span class="hook-block-title">실행 흐름</span>
+            <div class="hook-step-list">
+              ${item.steps.map((step, index) => `
+                <div class="hook-step">
+                  <span class="hook-step-number">${index + 1}</span>
+                  <div>
+                    <strong>${escapeHtml(step[0])}</strong>
+                    <span>${escapeHtml(step[1])}</span>
+                  </div>
+                </div>`).join("")}
+            </div>
+            <span class="hook-block-title">핵심 설정</span>
+            <pre class="code-block">${escapeHtml(item.code)}</pre>
+            <details>
+              <summary>내부 동작 상세 펼치기</summary>
+              ${facts(item.details)}
+            </details>
+          </div>
+        </article>`;
+    }
+
+    function renderHooks() {
+      const rows = hookIntegrations.filter((item) =>
+        !state.query || normalize(JSON.stringify(item)).includes(state.query)
+      );
+      const oidcRows = rows.filter((item) => item.kind !== "No Hook");
+      const serviceRows = rows.filter((item) => item.kind === "No Hook");
+      const sharedMatches = !state.query
+        || normalize(JSON.stringify(sharedTokenFlow)).includes(state.query);
+      return `
+        ${sectionHeading("OpenCode & Codex Client Hooks", "두 클라이언트의 인증 연결 방식은 다릅니다. OpenCode는 실제 plugin hook을 사용하고, Codex는 command credential helper를 사용합니다.", rows.length)}
+        <div class="grid two">
+          <article class="card hook-overview-card">
+            <div class="product-icon">ID</div>
+            <div>
+              <div class="card-header">
+                <div class="card-title">
+                  <h3>사용자 OIDC</h3>
+                  <p>대화형 사용자 로그인 · Keycloak Device Flow</p>
+                </div>
+                ${badge("Bearer", "accent")}
+              </div>
+              <div class="hook-overview-list">
+                <div class="hook-overview-item"><strong>OpenCode</strong><span>plugin request hook이 token을 주입</span></div>
+                <div class="hook-overview-item"><strong>Codex</strong><span>auth.command가 외부 token helper를 실행</span></div>
+                <div class="hook-overview-item"><strong>공유 상태</strong><span>같은 token cache와 refresh lifecycle 사용</span></div>
+              </div>
+            </div>
+          </article>
+          <article class="card hook-overview-card">
+            <div class="product-icon">SA</div>
+            <div>
+              <div class="card-header">
+                <div class="card-title">
+                  <h3>Service Account</h3>
+                  <p>자동화 실행 · 별도 Keycloak 사용자 로그인 없음</p>
+                </div>
+                ${badge("Subscription Key")}
+              </div>
+              <div class="hook-overview-list">
+                <div class="hook-overview-item"><strong>OpenCode</strong><span>--pure로 프로젝트 Keycloak OIDC hook 미로드</span></div>
+                <div class="hook-overview-item"><strong>Codex</strong><span>전용 profile의 env_http_headers 사용</span></div>
+                <div class="hook-overview-item"><strong>공유 원칙</strong><span>key는 환경 변수에서 APIM header로만 전달</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        ${oidcRows.length ? `
+          ${sectionHeading("사용자 OIDC 연결", "OpenCode의 request hook과 Codex의 command credential 차이를 단계별로 비교합니다.", oidcRows.length)}
+          <div class="grid two">${oidcRows.map(hookCard).join("")}</div>` : ""}
+
+        ${sharedMatches && oidcRows.length ? `
+          ${sectionHeading(sharedTokenFlow.title, "두 OIDC 경로가 공통으로 사용하는 token cache, refresh 및 browser login lifecycle입니다.")}
+          <article class="card credential-card">
+            <header class="credential-card-header">
+              <h3>Device Credential Lifecycle</h3>
+              ${badge("OpenCode + Codex", "accent")}
+            </header>
+            <div class="credential-card-body">
+              <span class="hook-block-title">Token 획득 순서</span>
+              <div class="hook-step-list">
+              ${sharedTokenFlow.steps.map((step, index) => `
+                <div class="hook-step">
+                  <span class="hook-step-number">${index + 1}</span>
+                  <div>
+                    <strong>${escapeHtml(step[0])}</strong>
+                    <span>${escapeHtml(step[1])}</span>
+                  </div>
+                </div>`).join("")}
+              </div>
+              <div class="credential-details">
+                ${facts(sharedTokenFlow.details)}
+              </div>
+              <p class="hook-source mono">공유 구현 · ${escapeHtml(sharedTokenFlow.source)}</p>
+            </div>
+          </article>` : ""}
+
+        ${serviceRows.length ? `
+          ${sectionHeading("Service Account 연결", "OIDC hook 없이 전용 설정과 APIM subscription key를 사용하는 자동화 경로입니다.", serviceRows.length)}
+          <div class="grid two">${serviceRows.map(hookCard).join("")}</div>` : ""}
+
+        ${rows.length ? "" : emptyState()}
+      `;
+    }
+
+    function routeCard(row) {
+      const endpoint = row["APIM 최종 Endpoint"];
+      const proxyRequired = row["Translator Proxy"] === "필수";
+      const unsupported = normalize(row["지원 상태"]).includes("미지원");
+      const endpointPath = String(endpoint).replace(/^https?:\/\/[^/]+/, "");
+      const firstHop = String(row["Client → 첫 Hop 요청"] || "").split("\n")[0];
+      const proxyTransform = row["Client"].startsWith("Codex")
+        ? "Responses → Chat"
+        : row["모델 API"] === "Responses"
+          ? "Messages → Responses"
+          : "Messages → Chat";
+      return `
+        <article class="card route-card ${proxyRequired ? "proxy" : "direct"}">
+          <header class="route-card-header">
+            <div class="product-icon">${escapeHtml(row["Client"].startsWith("OpenCode") ? "OC" : row["Client"].startsWith("Codex") ? "CX" : "CC")}</div>
+            <div class="card-title">
+              <h3>${escapeHtml(row["모델"])}</h3>
+              <p>${escapeHtml(row["Client"])} · ${escapeHtml(row["인증"])}</p>
+            </div>
+            <div class="badge-row">
+              ${badge(proxyRequired ? "Proxy 필요" : "직접 호출", proxyRequired ? "warning" : "success")}
+              ${unsupported ? badge("현재 미지원", "danger") : ""}
+              ${badge(row["모델 API"], "accent")}
+            </div>
+          </header>
+          <div class="route-card-body">
+            <div class="route-path">
+              <div class="route-node">
+                <strong>${escapeHtml(row["Client"])}</strong>
+                <span>${escapeHtml(firstHop)}</span>
+              </div>
+              <div class="route-arrow">→</div>
+              ${proxyRequired ? `
+                <div class="route-node proxy-node">
+                  <strong>Translator Proxy</strong>
+                  <span>${escapeHtml(proxyTransform)} · 현재 미구현</span>
+                </div>
+                <div class="route-arrow">→</div>` : ""}
+              <div class="route-node">
+                <strong>APIM Gateway</strong>
+                <span>${escapeHtml(endpointPath)}</span>
+              </div>
+              <div class="route-arrow">→</div>
+              <div class="route-node">
+                <strong>${escapeHtml(row["모델"])}</strong>
+                <span>${escapeHtml(row["모델 API"])} Backend</span>
+              </div>
+            </div>
+            <div class="endpoint">${renderText(row["Client → 첫 Hop 요청"])}\n→ ${renderText(endpoint)}</div>
+            <details>
+              <summary>인증, 변환 및 전체 호출 정보</summary>
+              ${facts(row, ["Client", "인증", "모델", "모델 API", "지원 상태", "Translator Proxy"])}
+            </details>
+          </div>
+        </article>`;
+    }
+
+    function routeCompatibilityCard(client, rows) {
+      const clientRows = rows.filter((row) => row["Client"] === client);
+      const apis = [...new Set(clientRows.map((row) => row["모델 API"]).filter(Boolean))];
+      const icon = client.startsWith("OpenCode") ? "OC" : client.startsWith("Codex") ? "CX" : "CC";
+      return `
+        <article class="card route-compat-card">
+          <div class="route-compat-header">
+            <div class="product-icon">${escapeHtml(icon)}</div>
+            <h3>${escapeHtml(client)}</h3>
+          </div>
+          <div class="route-compat-list">
+            ${apis.map((api) => {
+              const apiRows = clientRows.filter((row) => row["모델 API"] === api);
+              const proxyRequired = apiRows.some((row) => row["Translator Proxy"] === "필수");
+              const unsupported = apiRows.some((row) => normalize(row["지원 상태"]).includes("미지원"));
+              return `
+                <div class="route-compat-row">
+                  <strong>${escapeHtml(api)}</strong>
+                  ${badge(
+                    proxyRequired && unsupported ? "Proxy 필요 · 미구현" : proxyRequired ? "Proxy 경유" : "직접 호출",
+                    proxyRequired ? "warning" : "success"
+                  )}
+                </div>`;
+            }).join("")}
+          </div>
+        </article>`;
+    }
+
+    function renderRoutes() {
+      const clients = [...new Set(calls.items.map((row) => row["Client"]).filter(Boolean))];
+      const auth = [...new Set(calls.items.map((row) => row["인증"]).filter(Boolean))];
+      const apis = [...new Set(calls.items.map((row) => row["모델 API"]).filter(Boolean))];
+      const allDirectRows = calls.items.filter((row) => row["Translator Proxy"] !== "필수");
+      const allProxyRows = calls.items.filter((row) => row["Translator Proxy"] === "필수");
+      const rows = calls.items.filter((row) => {
+        const routeType = row["Translator Proxy"] === "필수" ? "Proxy 필요" : "직접 호출";
+        return matchesQuery(row)
+          && (state.filters.client === "전체" || row["Client"] === state.filters.client)
+          && (state.filters.auth === "전체" || row["인증"] === state.filters.auth)
+          && (state.filters.api === "전체" || row["모델 API"] === state.filters.api)
+          && (state.filters.proxy === "전체" || routeType === state.filters.proxy);
+      });
+      const directRows = rows.filter((row) => row["Translator Proxy"] !== "필수");
+      const proxyRows = rows.filter((row) => row["Translator Proxy"] === "필수");
+      return `
+        ${sectionHeading(calls.title, calls.intro, rows.length)}
+        <div class="grid two">
+          <article class="card route-overview-card direct">
+            <header class="route-overview-header">
+              <div>
+                <h3>직접 호출</h3>
+                <p>Translator 없이 현재 바로 사용 가능</p>
+              </div>
+              ${badge(`${allDirectRows.length}개 경로`, "success")}
+            </header>
+            <div class="route-overview-body">
+              <div class="route-path">
+                <div class="route-node"><strong>Client</strong><span>Responses 또는 Chat 요청</span></div>
+                <div class="route-arrow">→</div>
+                <div class="route-node"><strong>APIM</strong><span>인증 · 정책 · 모델 라우팅</span></div>
+                <div class="route-arrow">→</div>
+                <div class="route-node"><strong>Foundry Model</strong><span>동일 API 형식으로 처리</span></div>
+              </div>
+            </div>
+          </article>
+          <article class="card route-overview-card proxy">
+            <header class="route-overview-header">
+              <div>
+                <h3>Translator Proxy 필요</h3>
+                <p>현재 Proxy 미구현으로 바로 호출 불가</p>
+              </div>
+              ${badge(`${allProxyRows.length}개 경로`, "warning")}
+            </header>
+            <div class="route-overview-body">
+              <div class="route-path">
+                <div class="route-node"><strong>Client</strong><span>Responses 또는 Anthropic 요청</span></div>
+                <div class="route-arrow">→</div>
+                <div class="route-node proxy-node"><strong>Translator</strong><span>request · SSE · tool event 변환</span></div>
+                <div class="route-arrow">→</div>
+                <div class="route-node"><strong>APIM</strong><span>변환된 OpenAI API 요청</span></div>
+                <div class="route-arrow">→</div>
+                <div class="route-node"><strong>Foundry Model</strong><span>Responses 또는 Chat 처리</span></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        ${sectionHeading("Client별 지원 범위", "모델 API별로 직접 연결 가능한지 Translator Proxy가 필요한지 요약합니다.")}
+        <div class="route-compat-grid">
+          ${clients.map((client) => routeCompatibilityCard(client, calls.items)).join("")}
+        </div>
+
+        <div class="filters">
+          ${filterGroup("Client", "client", clients)}
+          ${filterGroup("인증", "auth", auth)}
+          ${filterGroup("프로토콜", "api", apis)}
+          ${filterGroup("경로", "proxy", ["직접 호출", "Proxy 필요"])}
+        </div>
+
+        ${directRows.length ? `
+          ${sectionHeading("직접 호출 경로", "Client와 Backend의 API 형식이 호환되어 Translator 없이 APIM을 바로 호출합니다.", directRows.length)}
+          <div class="grid two">${directRows.map(routeCard).join("")}</div>` : ""}
+
+        ${proxyRows.length ? `
+          ${sectionHeading("Translator Proxy 필요 경로", "Client wire와 Backend API 형식이 달라 request, response, streaming 및 tool event 변환이 필요합니다.", proxyRows.length)}
+          <div class="notice">아래 경로는 현재 Translator Proxy가 구현되지 않아 직접 사용할 수 없습니다.</div>
+          <div class="grid two">${proxyRows.map(routeCard).join("")}</div>` : ""}
+
+        ${rows.length ? dataTable(calls, rows, "호출 매트릭스 · 전체 표") : emptyState()}
+      `;
+    }
+
+    function responsesRequestBody(model) {
+      return {
+        model,
+        instructions: "You are a coding assistant.",
+        input: [
+          {
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Read README.md and summarize it."
+              }
+            ]
+          }
+        ],
+        tools: [
+          {
+            type: "function",
+            name: "read_file",
+            description: "Read a repository file.",
+            parameters: {
+              type: "object",
+              properties: {
+                path: { type: "string" }
+              },
+              required: ["path"],
+              additionalProperties: false
+            }
+          }
+        ],
+        tool_choice: "auto",
+        parallel_tool_calls: true,
+        reasoning: {
+          effort: "high",
+          summary: "auto"
+        },
+        text: {
+          verbosity: "low"
+        },
+        store: true,
+        include: ["reasoning.encrypted_content"],
+        max_output_tokens: 4096,
+        stream: true
+      };
+    }
+
+    function chatRequestBody(model) {
+      return {
+        model,
+        messages: [
+          {
+            role: "system",
+            content: "You are a coding assistant."
+          },
+          {
+            role: "user",
+            content: "Read README.md and summarize it."
+          }
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "read_file",
+              description: "Read a repository file.",
+              parameters: {
+                type: "object",
+                properties: {
+                  path: { type: "string" }
+                },
+                required: ["path"],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: "auto",
+        max_tokens: 4096,
+        stream: true
+      };
+    }
+
+    function messagesRequestBody(model) {
+      return {
+        model,
+        max_tokens: 4096,
+        system: "You are a coding assistant.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Read README.md and summarize it."
+              }
+            ]
+          }
+        ],
+        tools: [
+          {
+            name: "read_file",
+            description: "Read a repository file.",
+            input_schema: {
+              type: "object",
+              properties: {
+                path: { type: "string" }
+              },
+              required: ["path"]
+            }
+          }
+        ],
+        tool_choice: {
+          type: "auto"
+        },
+        stream: true
+      };
+    }
+
+    function requestJsonExamples(row) {
+      const responseModel = terraformCatalog.models?.find((model) => model.api === "responses")?.name
+        || "gpt-5.6-sol";
+      const chatModel = terraformCatalog.models?.find((model) => model.api === "chat")?.name
+        || "FW-GLM-5.2";
+      const wire = row["Wire/API"];
+
+      if (wire === "OpenAI Responses") {
+        return [{ label: "Client → APIM /responses", body: responsesRequestBody(responseModel) }];
+      }
+      if (wire === "OpenAI Chat Completions") {
+        return [{ label: "Client → APIM /chat/completions", body: chatRequestBody(chatModel) }];
+      }
+      if (wire === "Anthropic Messages") {
+        return [{ label: "Client → /v1/messages", body: messagesRequestBody(responseModel) }];
+      }
+      if (wire === "Responses → Chat") {
+        return [
+          { label: "Client Responses 요청", body: responsesRequestBody(chatModel) },
+          { label: "Proxy → APIM Chat 요청", body: chatRequestBody(chatModel) }
+        ];
+      }
+      if (wire === "Messages → Responses") {
+        return [
+          { label: "Client Anthropic 요청", body: messagesRequestBody(responseModel) },
+          { label: "Proxy → APIM Responses 요청", body: responsesRequestBody(responseModel) }
+        ];
+      }
+      if (wire === "Messages → Chat") {
+        return [
+          { label: "Client Anthropic 요청", body: messagesRequestBody(chatModel) },
+          { label: "Proxy → APIM Chat 요청", body: chatRequestBody(chatModel) }
+        ];
+      }
+      return [{ label: "Request body", body: {} }];
+    }
+
+    function parameterCard(row) {
+      const title = row["Wire/API"] || row[parameters.headers[0]];
+      const method = row["Method / Path"] || "";
+      const methodDisplay = method.startsWith("POST ")
+        ? `<span class="method">POST</span>${renderText(method.slice(5))}`
+        : renderText(method);
+      const target = row["사용 Client / 모델"] || row["대상 Client / 모델"] || "";
+      const status = title.startsWith("OpenAI ")
+        ? "APIM 직접 지원"
+        : title === "Anthropic Messages"
+          ? "현재 미지원"
+          : "Translator Proxy 필요";
+      const examples = requestJsonExamples(row);
+      return `
+        <article class="card spec-card">
+          <header class="spec-card-header">
+            <div class="card-title">
+              <h3>${escapeHtml(title)}</h3>
+              <p>${escapeHtml(target)}</p>
+            </div>
+            ${badge(status, badgeClass(status))}
+            ${method ? `<div class="endpoint">${methodDisplay}</div>` : ""}
+          </header>
+          <div class="spec-card-body">
+            <span class="hook-block-title">JSON Request Body</span>
+            <div class="spec-json-grid">
+              ${examples.map((example) => `
+                <section class="spec-json-panel">
+                  <div class="spec-json-label">
+                    <span>${escapeHtml(example.label)}</span>
+                    <span>JSON</span>
+                  </div>
+                  <pre class="json-block"><code>${escapeHtml(JSON.stringify(example.body, null, 2))}</code></pre>
+                </section>`).join("")}
+            </div>
+            <details>
+              <summary>파라미터, 변환 규칙 및 주의사항</summary>
+              ${facts(row, ["Wire/API", "사용 Client / 모델", "대상 Client / 모델", "Method / Path"])}
+            </details>
+          </div>
+        </article>`;
+    }
+
+    function renderParameters() {
+      const rows = parameters.items.filter(matchesQuery);
+      return `
+        ${sectionHeading(parameters.title, parameters.intro, rows.length)}
+        <div class="notice">JSON은 현재 배포 모델을 반영한 호출 예시입니다. 변환 경로는 왼쪽의 Client 요청과 오른쪽의 Proxy/APIM 이후 Backend 요청을 함께 표시합니다.</div>
+        <div class="grid two">${rows.length ? rows.map(parameterCard).join("") : emptyState()}</div>
+        ${dataTable(parameters, rows, "요청 파라미터 · 전체 표")}
+      `;
+    }
+
+    function renderPolicy() {
+      const rows = policy.items.filter(matchesQuery);
+      const orderHeader = policy.headers[0];
+      const stageHeader = policy.headers[1];
+      return `
+        ${sectionHeading(policy.title, policy.intro, rows.length)}
+        <div class="notice">APIM은 인증과 모델 라우팅, 제한된 body 정규화만 수행합니다. Responses↔Chat 또는 Anthropic↔OpenAI 프로토콜 변환은 수행하지 않습니다.</div>
+        <div class="timeline">
+          ${rows.length ? rows.map((row, index) => `
+            <article class="timeline-item">
+              <div class="timeline-step">${escapeHtml(row[orderHeader] || index + 1)}</div>
+              <div class="timeline-content">
+                <h3>${escapeHtml(row[stageHeader] || `Policy 단계 ${index + 1}`)}</h3>
+                ${facts(row, [orderHeader, stageHeader])}
+              </div>
+            </article>`).join("") : emptyState()}
+        </div>
+        ${dataTable(policy, rows, "APIM 정규화 및 정책 · 전체 표")}
+      `;
+    }
+
+    function currentBackendArchitecture(rows) {
+      return `
+        <article class="card architecture-card">
+          <div class="architecture-flow">
+            <div class="architecture-node">
+              <span class="architecture-kicker">Clients</span>
+              <strong>OpenCode · Codex · Service Account</strong>
+              <small>Keycloak bearer 또는 APIM subscription key</small>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="architecture-node accent">
+              <span class="architecture-kicker">APIM Gateway</span>
+              <strong>body.model → backend-id 라우팅</strong>
+              <small>요청 정규화 후 Managed Identity token으로 Authorization 교체</small>
+            </div>
+            <div class="architecture-arrow">→</div>
+            <div class="backend-lanes">
+              ${rows.map((row) => `
+                <div class="backend-lane">
+                  <div class="architecture-node success">
+                    <span class="architecture-kicker">APIM Backend 객체</span>
+                    <strong>${escapeHtml(row["APIM Backend ID"])}</strong>
+                    <small>${escapeHtml(row["모델"])} 전용 breaker · 1분 내 429 50회</small>
+                  </div>
+                  <div class="architecture-arrow">→</div>
+                  <div class="architecture-node">
+                    <span class="architecture-kicker">${escapeHtml(row["Endpoint 유형"])}</span>
+                    <strong>${escapeHtml(row["모델"])} deployment</strong>
+                    <small>${escapeHtml(row["API 형식"])} · Entra audience ${escapeHtml(row["Entra 토큰 대상"])}</small>
+                  </div>
+                </div>`).join("")}
+            </div>
+          </div>
+          <div class="architecture-legend">
+            <span>Backend 객체 수: ${rows.length}</span>
+            <span>고유 Base URL 수: ${new Set(rows.map((row) => row["Backend Base URL"])).size}</span>
+            <span>격리 단위: model/backend-id</span>
+            <span>자동 failover: 없음</span>
+          </div>
+        </article>`;
+    }
+
+    function renderBackends() {
+      const rows = backends.items.filter(matchesQuery);
+      const comparisonRows = endpointComparison.items.filter(matchesQuery);
+      return `
+        ${sectionHeading(backends.title, backends.intro, rows.length)}
+        ${sectionHeading("Backend 계층 구성", "URL, APIM Backend 객체, 실제 모델 deployment는 서로 다른 계층입니다.")}
+        <div class="grid three">
+          <article class="card">
+            <div class="card-title">
+              <h3>1. Backend Base URL</h3>
+              <p>실제 요청이 전달되는 네트워크 주소</p>
+            </div>
+            <p>예: Foundry Account의 <span class="mono">/openai/v1</span> 주소입니다. 여러 모델 deployment가 같은 Base URL을 공유할 수 있으므로 URL 하나가 모델 하나를 뜻하지 않습니다.</p>
+          </article>
+          <article class="card">
+            <div class="card-title">
+              <h3>2. APIM Backend 객체</h3>
+              <p>URL과 복원력 설정을 감싸는 APIM 관리 객체</p>
+            </div>
+            <p><span class="mono">backend-id</span>, Runtime URL, circuit breaker 같은 설정을 보유합니다. Policy의 <span class="mono">set-backend-service backend-id</span>가 이 객체를 선택합니다.</p>
+          </article>
+          <article class="card">
+            <div class="card-title">
+              <h3>3. Model deployment</h3>
+              <p>실제 추론과 quota를 소비하는 Azure 리소스</p>
+            </div>
+            <p>요청 body의 <span class="mono">model</span>로 선택됩니다. TPM/RPM과 capacity는 이 deployment에 귀속되며 APIM Backend 객체를 추가해도 처리량이 늘지는 않습니다.</p>
+          </article>
+        </div>
+
+        ${sectionHeading("현재 아키텍처 · 모델별 Backend 격리", "같은 Base URL을 공유하더라도 model마다 별도 Backend 객체와 circuit breaker 상태를 유지합니다.")}
+        ${rows.length ? currentBackendArchitecture(rows) : emptyState()}
+
+        ${sectionHeading("모델별 Backend 분리 필요성", "Circuit breaker 상태는 URL이나 body.model이 아니라 APIM Backend 객체에 연결됩니다.")}
+        <div class="grid two">
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <h3>현재 구성 · 모델별 Backend</h3>
+                <p>장애 범위가 해당 모델로 제한됨</p>
+              </div>
+              ${badge("격리됨", "success")}
+            </div>
+            <div class="flow">
+              <div class="flow-step"><strong>Model A</strong><span>1분 내 429 50회</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-step"><strong>Backend A Open</strong><span>A 요청만 503</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-step"><strong>Model B/C</strong><span>각 Backend로 계속 정상 호출</span></div>
+            </div>
+            <p>Model A가 quota 또는 과부하로 반복 429를 반환해도 A의 Backend 객체만 열립니다. 기본 trip duration은 10초이며, backend의 Retry-After가 있으면 해당 복구 시간을 수용합니다.</p>
+          </article>
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <h3>Shared Backend 위험 구성</h3>
+                <p>모델 간 장애 전파 가능</p>
+              </div>
+              ${badge("공유 blast radius", "danger")}
+            </div>
+            <div class="flow">
+              <div class="flow-step"><strong>Model A</strong><span>반복 429로 shared breaker trip</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-step"><strong>Backend Shared Open</strong><span>공통 상태가 Open</span></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-step"><strong>Model A/B/C</strong><span>같은 Backend를 쓰면 모두 차단</span></div>
+            </div>
+            <p>Base URL이 같다는 이유로 모든 모델을 Backend 하나에 연결하면 breaker 상태도 하나입니다. 한 모델의 quota 문제가 정상인 다른 모델의 요청까지 막을 수 있습니다.</p>
+          </article>
+        </div>
+        <div class="notice">현재 구성은 <strong>장애 격리</strong>를 제공하지만 <strong>HA failover</strong>를 제공하지 않습니다. Circuit이 열리면 APIM은 해당 Backend로 보내지 않고 503을 반환하며, APIM Gateway 인스턴스 간 breaker 판정은 분산 구조상 근사치입니다.</div>
+
+        ${sectionHeading("모델별 Backend 인벤토리", "Terraform api_catalog_manifest에서 생성된 model, backend-id, endpoint, 인증 및 circuit breaker 설정입니다.", rows.length)}
+        <div class="grid three">${rows.length ? rows.map(modelCard).join("") : emptyState()}</div>
+        ${dataTable(backends, rows, "모델별 Backend · 전체 표")}
+
+        ${sectionHeading("Project endpoint vs Azure OpenAI endpoint", "두 endpoint의 범위, 기능, 인증과 선택 기준을 비교합니다.", comparisonRows.length)}
+        ${dataTable(endpointComparison, comparisonRows, "Endpoint 비교")}
+
+        ${sectionHeading("운영 관점 핵심 해석", "현재 구성의 HA와 quota 관점에서 반드시 구분해야 할 항목입니다.")}
+        <div class="grid two">
+          ${backendNotes.map((note, index) => `
+            <article class="card">
+              <div class="card-header">
+                <div class="card-title">
+                  <h3>운영 포인트 ${index + 1}</h3>
+                </div>
+                ${badge(index === 2 ? "HA" : index === 3 ? "Quota" : "Backend")}
+              </div>
+              <p>${renderText(note)}</p>
+            </article>`).join("")}
+        </div>
+
+        ${sectionHeading("공식 문서 및 구성 근거", "Backend 탭에 포함된 참조입니다.", backendRefs.length)}
+        <div class="grid three">
+          ${backendRefs.map((ref) => `
+            <article class="card">
+              <div class="card-title"><h3>${escapeHtml(ref.label)}</h3></div>
+              ${isUrl(ref.value)
+                ? `<a class="source-link" href="${escapeHtml(ref.value)}" target="_blank" rel="noreferrer">${escapeHtml(ref.value)}</a>`
+                : `<p class="source-link">${renderText(ref.value)}</p>`}
+            </article>`).join("")}
+        </div>
+      `;
+    }
+
+    function sourceCard(row) {
+      const urlHeader = sources.headers.find((header) => header.includes("URL")) || sources.headers[3];
+      const url = row[urlHeader];
+      return `
+        <article class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <h3>${escapeHtml(row["Source"] || row[sources.headers[1]])}</h3>
+              <p>${escapeHtml(row["분류"] || row[sources.headers[0]])}</p>
+            </div>
+            ${badge(row["확인일"] || "")}
+          </div>
+          ${facts(row, ["Source", "분류", "확인일", urlHeader])}
+          ${isUrl(url)
+            ? `<a class="source-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(url)}</a>`
+            : `<p class="source-link mono">${renderText(url)}</p>`}
+        </article>`;
+    }
+
+    function renderSources() {
+      const rows = sources.items.filter(matchesQuery);
+      return `
+        ${sectionHeading(sources.title, sources.intro, rows.length)}
+        <div class="grid three">${rows.length ? rows.map(sourceCard).join("") : emptyState()}</div>
+        ${dataTable(sources, rows, "소스 및 가정 · 전체 표")}
+      `;
+    }
+
+    function render() {
+      const renderers = {
+        catalog: renderCatalog,
+        hooks: renderHooks,
+        routes: renderRoutes,
+        parameters: renderParameters,
+        policy: renderPolicy,
+        backends: renderBackends,
+        sources: renderSources
+      };
+      document.getElementById("content").innerHTML = renderers[state.view]();
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.view === state.view);
+        tab.setAttribute("aria-current", tab.dataset.view === state.view ? "page" : "false");
+      });
+    }
+
+    function renderStats() {
+      const stats = [
+        [new Set(summary.items.map((row) => row["Client"])).size, "지원 Client"],
+        [backends.items.length, "라우팅 모델"],
+        [2, "APIM API 형식"],
+        [2, "인증 방식"]
+      ];
+      document.getElementById("hero-stats").innerHTML = stats
+        .map(([value, label]) => `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`)
+        .join("");
+    }
+
+    document.getElementById("tabs").addEventListener("click", (event) => {
+      const tab = event.target.closest("[data-view]");
+      if (!tab) return;
+      state.view = tab.dataset.view;
+      location.hash = state.view;
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    document.getElementById("content").addEventListener("click", (event) => {
+      const chip = event.target.closest("[data-filter]");
+      if (!chip) return;
+      state.filters[chip.dataset.filter] = chip.dataset.value;
+      render();
+    });
+
+    const search = document.getElementById("global-search");
+    search.addEventListener("input", () => {
+      state.query = normalize(search.value.trim());
+      render();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "/" && document.activeElement !== search) {
+        event.preventDefault();
+        search.focus();
+      }
+      if (event.key === "Escape" && document.activeElement === search) {
+        search.value = "";
+        state.query = "";
+        search.blur();
+        render();
+      }
+    });
+
+    document.getElementById("menu-toggle").addEventListener("click", () => {
+      document.body.classList.toggle("nav-collapsed");
+    });
+
+    window.addEventListener("hashchange", () => {
+      const next = location.hash.slice(1);
+      if (views.includes(next) && next !== state.view) {
+        state.view = next;
+        render();
+      }
+    });
+
+    renderStats();
+    render();
+  </script>
+</body>
+</html>

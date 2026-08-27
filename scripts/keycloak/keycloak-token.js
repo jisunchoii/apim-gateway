@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, resolve } from "node:path"
+import { createDeviceFlowLogger } from "./device-flow-logger.js"
 import { createKeycloakDeviceCredential } from "./keycloak-device-auth.js"
 import { readTerraformStringOutput } from "./terraform-settings.js"
 
@@ -70,6 +71,7 @@ const main = async () => {
   const cacheKey = createHash("sha256")
     .update(`${discoveryUrl}\n${clientId}\n${scope}`)
     .digest("hex")
+  const shouldOpenBrowser = process.argv.includes("--open-browser")
 
   const tokenStore = {
     load: async () => {
@@ -104,12 +106,17 @@ const main = async () => {
     },
   }
 
+  const logger = createDeviceFlowLogger({
+    openBrowser: shouldOpenBrowser,
+    logger: (message) => process.stderr.write(`${message}\n`),
+  })
+
   const credential = createKeycloakDeviceCredential({
     discoveryUrl,
     clientId,
     scope,
     tokenStore,
-    logger: (message) => process.stderr.write(`${message}\n`),
+    logger,
   })
 
   process.stdout.write(`${await credential.getToken()}\n`)

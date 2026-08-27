@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check scripts/keycloak/keycloak-device-auth.js && node --check scripts/keycloak/terraform-settings.js && node --check scripts/keycloak/keycloak-token.js && node --check scripts/keycloak/opencode-keycloak-hook.js"
+    "check": "node --check scripts/keycloak/device-flow-logger.js && node --check scripts/keycloak/keycloak-device-auth.js && node --check scripts/keycloak/terraform-settings.js && node --check scripts/keycloak/keycloak-token.js && node --check scripts/keycloak/opencode-keycloak-hook.js && node --check scripts/generate-model-gateway-registry.mjs",
+    "generate:registry": "node scripts/generate-model-gateway-registry.mjs"
   },
   "engines": {
     "node": ">=20"

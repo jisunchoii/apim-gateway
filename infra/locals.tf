@@ -93,6 +93,25 @@ locals {
     for model_name in local.routed_models :
     model_name if try(local.model_targets[model_name].opencode_api == "chat", false)
   ]
+  api_catalog_models = [
+    for model_name in local.routed_models : {
+      name             = model_name
+      source           = contains(keys(var.model_deployments), model_name) ? "gateway-managed" : "external-project"
+      backend_id       = local.model_backend_ids[model_name]
+      backend_url      = local.model_targets[model_name].backend_url
+      auth_resource    = local.model_targets[model_name].auth_resource
+      api              = local.model_targets[model_name].opencode_api
+      api_path         = local.model_targets[model_name].opencode_api == "responses" ? "/responses" : "/chat/completions"
+      capacity_tpm     = local.model_targets[model_name].capacity_tpm
+      model_name       = try(var.model_deployments[model_name].model_name, null)
+      model_format     = try(var.model_deployments[model_name].model_format, null)
+      model_version    = try(var.model_deployments[model_name].model_version, null)
+      sku_name         = try(var.model_deployments[model_name].sku_name, null)
+      capacity_units   = try(var.model_deployments[model_name].capacity, null)
+      rai_policy_name  = try(var.model_deployments[model_name].rai_policy_name, null)
+      project_resource = try(var.project_model_deployments[model_name].project_resource_id, null)
+    }
+  ]
 
   # Catch invalid policy routes before APIM accepts a configuration that can only fail at request time.
   undeployed_routed = setsubtract(local.routed_models, local.deployed_models)

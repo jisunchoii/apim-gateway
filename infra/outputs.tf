@@ -101,6 +101,25 @@ output "opencode_model_config" {
   }
 }
 
+output "api_catalog_manifest" {
+  description = "Non-secret deployment catalog consumed by the generated Model Gateway Registry HTML."
+  value = {
+    schema_version = 1
+    gateway = {
+      name                 = azurerm_api_management.apim.name
+      location             = azurerm_resource_group.rg.location
+      oidc_base_url        = "${azurerm_api_management.apim.gateway_url}/openai/v1"
+      service_base_url     = "${azurerm_api_management.apim.gateway_url}/service/openai/v1"
+      foundry_account_name = try(azurerm_cognitive_account.foundry["gateway"].name, null)
+    }
+    backend_identity = {
+      audience = "https://ai.azure.com"
+      role     = "Cognitive Services User"
+    }
+    models = local.api_catalog_models
+  }
+}
+
 output "trace_source" {
   description = "Source value emitted by the APIM trace policy and used by operational KQL."
   value       = local.trace_source

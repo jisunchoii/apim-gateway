@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises"
 import { homedir } from "node:os"
 import { dirname, resolve } from "node:path"
+import { createDeviceFlowLogger } from "./device-flow-logger.js"
 import { createKeycloakDeviceCredential } from "./keycloak-device-auth.js"
 import {
   readOpenCodeModelConfig,
@@ -227,6 +228,8 @@ export const KeycloakGateway = async () => {
   const cacheKey = createHash("sha256")
     .update(`${discoveryUrl}\n${clientId}\n${scope}`)
     .digest("hex")
+  const openBrowser =
+    process.env.LLMGW_OIDC_OPEN_BROWSER?.trim().toLowerCase() !== "false"
   const tokenStore = {
     load: async () => {
       try {
@@ -264,6 +267,7 @@ export const KeycloakGateway = async () => {
     clientId,
     scope,
     tokenStore,
+    logger: createDeviceFlowLogger({ openBrowser }),
   })
 
   return {

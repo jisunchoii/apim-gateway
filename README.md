@@ -140,6 +140,9 @@ Chat 전용 `stream_options`를 제거합니다. 또한 OpenCode가 role 기반 
 `opencode.json`은 `scripts/keycloak/opencode-keycloak-hook.js`를 로드합니다. Hook은 최초에만
 Device Flow로 로그인하고 access/refresh token을 사용자 프로필의 `~/.llmgw/keycloak-token.json`에
 저장한 뒤 만료 전에 자동 갱신합니다. 캐시 경로는 `LLMGW_OIDC_CACHE_PATH`로 변경할 수 있습니다.
+로그인이 필요하면 기본 브라우저에서 verification URL을 자동으로 열며, 터미널에도 URL과 user
+code를 계속 표시합니다. 브라우저 자동 실행이 불가능한 환경에서는
+`LLMGW_OIDC_OPEN_BROWSER=false`로 비활성화할 수 있습니다.
 모델 목록과 기본 모델은 main Terraform의 `opencode_model_config` output에서 읽으므로
 `routed_models`와 별도로 하드코딩하지 않습니다.
 
@@ -280,13 +283,29 @@ wire_api = "responses"
 
 [model_providers.llmgw.auth]
 command = "node"
-args = ["/absolute/path/to/apim-gateway/scripts/keycloak/keycloak-token.js"]
+args = ["/absolute/path/to/apim-gateway/scripts/keycloak/keycloak-token.js", "--open-browser"]
+timeout_ms = 600000
 refresh_interval_ms = 240000
 ```
 
-`keycloak-token.js`는 안내 문구를 표준 오류에, access token만 표준 출력에 기록합니다. refresh
-token은 OpenCode hook과 같은 사용자 프로필의 `~/.llmgw/keycloak-token.json`에 저장되며 소스 코드나
-`.env`에는 저장하지 않습니다.
+Codex는 `auth.command`의 표준 오류를 프로세스가 끝날 때까지 캡처하므로 Device Flow URL을
+터미널에 실시간으로 표시하지 않습니다. `--open-browser`를 사용하면 최초 로그인이나 refresh
+실패로 Device Flow가 필요할 때 helper가 인증 URL을 기본 브라우저로 직접 엽니다. Codex는 로그인을
+기다리며, 브라우저에서 승인을 완료하면 요청을 이어서 실행합니다.
+
+`keycloak-token.js`는 안내 문구와 오류를 표준 오류에, access token만 표준 출력에 기록합니다.
+refresh token은 OpenCode hook과 같은 사용자 프로필의 `~/.llmgw/keycloak-token.json`에 저장되며
+소스 코드나 `.env`에는 저장하지 않습니다. 유효한 캐시 또는 refresh token이 있으면 브라우저를
+열지 않고 자동으로 access token을 반환합니다.
+
+브라우저가 자동으로 열리지 않으면 별도 터미널에서 helper를 직접 실행해 로그인한 뒤 Codex를
+다시 시작합니다. 이미 Device Flow에서 대기 중인 Codex 프로세스도 종료 후 다시 실행해야 변경된
+`auth.command` 인수가 적용됩니다.
+
+```powershell
+node C:\absolute\path\to\apim-gateway\scripts\keycloak\keycloak-token.js --open-browser 1>$null
+codex --profile llmgw -m gpt-5.6-sol
+```
 
 #### 서비스 계정
 
