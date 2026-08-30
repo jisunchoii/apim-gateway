@@ -389,11 +389,15 @@ npm run claude
 
 1. APIM catalog(또는 환경 변수)로 전용 OpenCodex config를 씁니다.
 2. 전용 Claude settings에 SessionStart hook을 등록합니다.
-3. OpenCodex를 loopback에서 기동하고 health를 확인합니다.
-4. `ocx claude`로 Claude Code를 시작합니다.
-5. SessionStart hook이 Okta Device Flow와 인증 프록시를 준비합니다.
+3. 최초 실행이면 Okta Device Flow를 시작하고 로그인이 끝날 때까지 기다립니다.
+4. 인증 프록시를 loopback에서 기동하고 health를 확인합니다.
+5. OpenCodex를 loopback에서 기동하고 health를 확인합니다.
+6. `ocx claude`로 Claude Code를 시작합니다.
+7. SessionStart hook이 저장된 token을 확인하고 인증 프록시를 재사용합니다.
 
 최초 세션만 브라우저에서 user code를 승인합니다. 이후는 refresh token으로 갱신합니다.
+GUI가 없는 Linux, SSH, Cloud Shell에서는 브라우저가 자동으로 열리지 않습니다. 터미널에 출력된
+URL과 user code를 로컬 PC 브라우저에서 열어 승인합니다.
 요청 경로의 APIM 401은 브라우저 로그인을 열지 않습니다. `login_required`이면
 `npm run claude`를 다시 실행해 로그인합니다.
 
@@ -435,6 +439,7 @@ Claude Code가 모델 이름을 몰라 200k로 가정한다는 경고가 나면,
 | OpenCodex pin 불일치 | doctor `prerequisites` | 저장소에서 `npm ci` |
 | port 충돌 | 10100 / 10101 | `LLMGW_OPENCODEX_PORT`, `LLMGW_AUTH_PROXY_PORT` 또는 점유 프로세스 종료 |
 | stale proxy / 이전 게이트웨이 | doctor `auth_proxy` / `opencodex` `matches: false` | `npm run claude:restart` |
+| GUI 없는 Linux에서 브라우저가 안 열림 | 터미널의 Device Flow URL과 user code | 로컬 PC 브라우저에서 URL을 직접 열고 code 입력 |
 | 브라우저 로그인 반복 | token cache, `offline_access` | cache 삭제 후 `npm run claude` |
 | `401` / `login_required` | 만료된 refresh, 잘못된 client | 대화형으로 다시 로그인. 요청 중 Device Flow는 열리지 않음 |
 | `403` | `routed_models`, 모델 이름 | deployment name과 allowlist 확인 |

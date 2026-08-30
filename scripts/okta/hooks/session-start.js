@@ -64,8 +64,11 @@ export const drainStdin = async (stream = process.stdin) => {
  */
 export const ensureOktaAuth = async ({
   createCredential = createOktaClaudeCredential,
+  env = process.env,
+  homeDirectory = homedir(),
 } = {}) => {
-  await createCredential().getToken()
+  const settings = readOktaClaudeSettings({ env, homeDirectory })
+  await createCredential({ settings }).getToken()
 }
 
 /**

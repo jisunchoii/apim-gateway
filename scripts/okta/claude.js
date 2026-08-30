@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url"
 import { writeOpenCodexConfig } from "../opencodex/configure-okta-gateway.js"
 import { writeClaudeCodeSettings } from "./claude-settings.js"
 import { stopOpenCodex } from "./down.js"
+import {
+  ensureAuthProxy,
+  ensureOktaAuth,
+} from "./hooks/session-start.js"
 import { openCodexFingerprint } from "./runtime-fingerprint.js"
 
 const require = createRequire(import.meta.url)
@@ -218,10 +222,20 @@ export const configure = async () => {
   return { setup, settingsPath }
 }
 
+export const ensureClaudeAuthentication = async ({
+  env = process.env,
+  ensureAuth = ensureOktaAuth,
+  ensureProxy = ensureAuthProxy,
+} = {}) => {
+  await ensureAuth({ env })
+  await ensureProxy({ env })
+}
+
 export const main = async ({ extraArgs = [] } = {}) => {
   validatePrerequisites()
   const { setup } = await configure()
   const childEnvironment = buildChildEnvironment({ setup })
+  await ensureClaudeAuthentication({ env: childEnvironment })
   await ensureOpenCodexReady({ setup, env: childEnvironment })
 
   const claudeChild = spawn(
