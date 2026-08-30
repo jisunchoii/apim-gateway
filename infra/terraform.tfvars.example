@@ -1,6 +1,6 @@
-# 새 배포의 resource name, tag, trace source를 결정한다. 배포 환경마다 명시적으로 설정한다.
+# 새 배포의 resource name, tag, trace source를 결정합니다. 배포 환경마다 명시적으로 설정합니다.
 # 신규 환경은 첫 terraform init 전에 scripts/bootstrap-backend.sh를 실행해 Azure Blob remote
-# state를 생성한다. 기존 local-state 환경에는 migration 승인 없이 실행하지 않는다.
+# state를 생성합니다. 기존 local-state 환경에는 migration 승인 없이 실행하지 않습니다.
 prefix       = "llmgw"
 env          = "dev"
 trace_source = "llm-gateway"
@@ -12,12 +12,12 @@ cost_center = "cc-1234"
 apim_publisher_name  = "Platform Team"
 apim_publisher_email = "platform-team@example.com"
 
-# Premium은 classic tier 중 autoscale과 SLA를 지원하며 unit당 backend 동시 연결 한도가 2,048개다.
-# 이후 unit 증설은 서비스 중단 없이 적용할 수 있다.
+# Premium은 classic tier 중 autoscale과 SLA를 지원하며 unit당 backend 동시 연결 한도가 2,048개입니다.
+# 이후 unit 증설은 서비스 중단 없이 적용할 수 있습니다.
 apim_sku = "Premium_1"
 
-# Okta 최종 사용자 인증 설정이다. 고객의 기존 Okta 조직에서 Custom Authorization Server와
-# Native App을 만들고 Device Authorization 및 Refresh Token grant를 활성화한다.
+# Okta 최종 사용자 인증 설정입니다. 고객의 기존 Okta 조직에서 Custom Authorization Server와
+# Native App을 만들고 Device Authorization 및 Refresh Token grant를 활성화합니다.
 oidc_provider = {
   openid_config_url = "https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
   audience          = "llm-gateway-api"
@@ -31,13 +31,13 @@ oidc_provider = {
   user_label_claim  = "llm_gateway_user"
 }
 
-# 사용자·모델별 TPM 상한이다. 0이면 제한 정책을 생성하지 않으며 이것이 기본값이다.
+# 사용자·모델별 TPM 상한입니다. 0이면 제한 정책을 생성하지 않으며 이것이 기본값입니다.
 # 예산 제한이 아니라 runaway agent 한 명이 모델 전체 TPM을 소진해 다른 사용자까지 429를 받는
-# 상황을 줄이는 보호 장치다. README의 사용자별 KQL에서 실제 p99를 확인한 뒤 정상 사용량보다
-# 충분히 높게 설정한다. 초기 참고값은 대략 (capacity * 1000) / 동시 사용자 수다.
+# 상황을 줄이는 보호 장치입니다. README의 사용자별 KQL에서 실제 p99를 확인한 뒤 정상 사용량보다
+# 충분히 높게 설정합니다. 초기 참고값은 대략 (capacity * 1000) / 동시 사용자 수입니다.
 user_tokens_per_minute = 0
 
-# APIM에서 호출을 허용할 모델 목록이다. deployment 이름과 정확히 일치해야 한다.
+# APIM에서 호출을 허용할 모델 목록입니다. deployment 이름과 정확히 일치해야 합니다.
 routed_models = [
   "gpt-5.6-sol",
   "gpt-5.6-terra",
@@ -46,10 +46,10 @@ routed_models = [
   "grok-4.6",
 ]
 
-# 거버넌스 Workbook의 선택적 비용 추정 단가다. 아래 값은 2026-08-04 공개 USD retail 단가다.
-# GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 일반 input/output 단가다.
-# Workbook은 cached input과 long-context를 구분하지 않으므로 실제 계약·사용 패턴에 맞게 교체한다.
-# Fireworks 모델은 Data Zone pay-per-token 단가이며 세금, 할인, 계약 단가는 반영하지 않는다.
+# 거버넌스 Workbook의 선택적 비용 추정 단가입니다. 아래 값은 2026-08-04 공개 USD retail 단가입니다.
+# GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 일반 input/output 단가입니다.
+# Workbook은 cached input과 long-context를 구분하지 않으므로 실제 계약·사용 패턴에 맞게 교체합니다.
+# Fireworks 모델은 Data Zone pay-per-token 단가이며 세금, 할인, 계약 단가는 반영하지 않습니다.
 # Retail Prices API: https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices
 # Grok 4.6: https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-grok
 # Grok pricing: https://azure.microsoft.com/pricing/details/ai-foundry-models/grok/
@@ -76,12 +76,12 @@ model_pricing_usd_per_million = {
   }
 }
 
-# null은 model_deployments가 비어 있으면 계정을 만들지 않고, 나중에 모델이 추가되면 자동 생성한다.
-# 마지막 관리형 모델 제거 후 빈 계정을 유지하려면 제거 전에 true로 변경한다.
+# null은 model_deployments가 비어 있으면 계정을 만들지 않고, 나중에 모델이 추가되면 자동 생성합니다.
+# 마지막 관리형 모델 제거 후 빈 계정을 유지하려면 제거 전에 true로 변경합니다.
 managed_foundry_account_enabled = null
 
-# 이 스택이 Foundry 계정과 deployment를 만든다. eastus2 카탈로그 기준 버전이다.
-# Grok 4.6은 Global Standard만 지원한다.
+# 이 스택이 Foundry 계정과 deployment를 만듭니다. eastus2 카탈로그 기준 버전입니다.
+# Grok 4.6은 Global Standard만 지원합니다.
 # https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-grok
 model_deployments = {
   "gpt-5.6-sol" = {
@@ -138,8 +138,8 @@ model_deployments = {
   }
 }
 
-# 기존 Foundry 프로젝트 모델을 연결할 때만 채운다. 이 스택이 모델을 만들면 빈 map으로 둔다.
-# placeholder project ID를 그대로 apply하면 lookup이 실패한다.
+# 기존 Foundry 프로젝트 모델을 연결할 때만 채웁니다. 이 스택이 모델을 만들면 빈 map으로 둡니다.
+# placeholder project ID를 그대로 apply하면 lookup이 실패합니다.
 # 기존 프로젝트 ARM ID 조회:
 #   az cognitiveservices account project show --name <foundry-resource-name> --project-name <project-name> --resource-group <resource-group-name> --query id -o tsv
 project_model_deployments = {}

@@ -129,7 +129,9 @@ grant condition에는 `Device Authorization`만 선택합니다.
 
 ## 3. Discovery 확인
 
-브라우저나 PowerShell에서 discovery document를 조회합니다.
+브라우저나 OS별 명령으로 discovery document를 조회합니다.
+
+PowerShell:
 
 ```powershell
 $discovery = Invoke-RestMethod "https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
@@ -137,6 +139,23 @@ $discovery.issuer
 $discovery.device_authorization_endpoint
 $discovery.token_endpoint
 $discovery.jwks_uri
+```
+
+Bash / Linux:
+
+```bash
+export DISCOVERY_URL="https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
+
+node -e '
+fetch(process.env.DISCOVERY_URL)
+  .then((response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return response.json()
+  })
+  .then(({ issuer, device_authorization_endpoint, token_endpoint, jwks_uri }) => {
+    console.log({ issuer, device_authorization_endpoint, token_endpoint, jwks_uri })
+  })
+'
 ```
 
 네 값이 모두 HTTPS URL이어야 하며 `issuer`는 Terraform에 전달할 값과 정확히 일치해야 합니다.
@@ -171,7 +190,9 @@ Microsoft 공식 문서:
 
 ## 5. Claude Code 실행
 
-저장소 루트의 PowerShell에서 tenant별 값을 환경 변수로 설정합니다.
+저장소 루트에서 OS별 명령으로 tenant 값을 환경 변수에 설정합니다.
+
+Windows PowerShell:
 
 ```powershell
 npm ci
@@ -184,15 +205,35 @@ $env:LLMGW_OIDC_SCOPE = "openid offline_access llm-gateway"
 npm run claude
 ```
 
-브라우저에서 user code를 승인하면 Okta access/refresh token은
-`%USERPROFILE%\.llmgw\okta-claude-token.json`에 저장됩니다. OpenCodex 설정은 별도
-`%USERPROFILE%\.llmgw\opencodex-okta` profile에 생성됩니다.
+Bash / Linux:
+
+```bash
+npm ci
+
+export LLMGW_BASE_URL="https://<apim-name>.azure-api.net/openai/v1"
+export LLMGW_OIDC_DISCOVERY_URL="https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
+export LLMGW_OIDC_CLIENT_ID="<native-app-client-id>"
+export LLMGW_OIDC_SCOPE="openid offline_access llm-gateway"
+
+npm run claude
+```
+
+브라우저에서 user code를 승인하면 Okta access/refresh token과 OpenCodex 설정은 다음 경로에
+저장됩니다.
+
+| 항목 | Windows | Linux |
+|---|---|---|
+| Token cache | `%USERPROFILE%\.llmgw\okta-claude-token.json` | `~/.llmgw/okta-claude-token.json` |
+| OpenCodex profile | `%USERPROFILE%\.llmgw\opencodex-okta` | `~/.llmgw/opencodex-okta` |
 
 `npm run claude`는 전용 OpenCodex profile과 Claude Code settings(SessionStart hook)를
-구성한 뒤 `ocx claude`를 실행합니다. Claude Code가 시작될 때 SessionStart hook이 Okta Device
-Flow 인증을 수행하고 로컬 인증 프록시를 기동하므로, 최초 세션에서만 브라우저 승인이
-필요하고 이후 세션은 cache된 refresh token으로 자동 인증됩니다. 설정만 생성하려면
-`npm run claude:configure`, 연결 확인은 `npm run claude:doctor`를 실행합니다.
+구성한 뒤 Okta Device Flow 인증과 로컬 인증 프록시 준비를 먼저 완료하고 `ocx claude`를
+실행합니다. 최초 세션에서만 브라우저 승인이 필요하고 이후 세션은 cache된 refresh token으로
+자동 인증됩니다. 설정만 생성하려면 `npm run claude:configure`, 연결 확인은
+`npm run claude:doctor`를 실행합니다.
+
+GUI가 없는 Linux, SSH, Cloud Shell에서는 브라우저가 자동으로 열리지 않습니다. 터미널에
+표시되는 verification URL을 로컬 PC 브라우저에서 열고 user code를 입력합니다.
 
 ## 6. 로컬 런타임 종료
 
