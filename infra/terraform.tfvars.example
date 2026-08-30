@@ -16,8 +16,8 @@ apim_publisher_email = "platform-team@example.com"
 # 이후 unit 증설은 서비스 중단 없이 적용할 수 있다.
 apim_sku = "Premium_1"
 
-# Okta 테스트 최종 사용자 인증 설정이다. Custom Authorization Server와 Native App에서
-# Device Authorization 및 Refresh Token grant를 활성화해야 한다.
+# Okta 최종 사용자 인증 설정이다. 고객의 기존 Okta 조직에서 Custom Authorization Server와
+# Native App을 만들고 Device Authorization 및 Refresh Token grant를 활성화한다.
 oidc_provider = {
   openid_config_url = "https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
   audience          = "llm-gateway-api"

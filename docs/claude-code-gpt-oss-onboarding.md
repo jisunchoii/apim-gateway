@@ -130,6 +130,16 @@ az cognitiveservices usage list --location eastus2 --output table
 
 ## 4. Okta 구성
 
+Okta는 우리 API 보호에 Custom Authorization Server를 쓰라고 합니다. Org Authorization Server는
+이 게이트웨이의 custom audience·scope·claim을 넣을 수 없습니다.
+
+고객 운영 조직은 **API Access Management**가 있어야 합니다. **Security > API > Authorization
+Servers**가 없으면 Okta 관리자에게 요청합니다.
+
+이 저장소를 먼저 검증할 때는 고객 조직 대신 [Integrator Free Plan](https://developer.okta.com/signup/)을
+써도 됩니다. Free Plan org는 테스트용 Custom AS를 제공합니다. 고객에게 Free Plan 가입을 요구하지
+않습니다.
+
 상세 화면 절차는 [Okta 관리자 가이드](okta-admin-guide.md)입니다. 요약:
 
 1. Custom Authorization Server를 만들고 audience를 `llm-gateway-api`로 둡니다.
@@ -139,7 +149,7 @@ az cognitiveservices usage list --location eastus2 --output table
    - `llm_gateway_user`: 사용자 표시 이름
 4. Native OIDC application에서 Device Authorization과 Refresh Token을 켭니다.
    client secret을 쓰지 않습니다.
-5. 테스트 사용자를 `invoke` 그룹에 넣습니다.
+5. 게이트웨이 사용자를 `invoke` 그룹에 넣습니다.
 
 기록할 값:
 
