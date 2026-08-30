@@ -43,7 +43,7 @@ routed_models = [
   "gpt-5.6-terra",
   "gpt-5.6-luna",
   "FW-GLM-5.2",
-  "FW-Kimi-K3",
+  "grok-4.6",
 ]
 
 # 거버넌스 Workbook의 선택적 비용 추정 단가다. 아래 값은 2026-08-04 공개 USD retail 단가다.
@@ -51,7 +51,8 @@ routed_models = [
 # Workbook은 cached input과 long-context를 구분하지 않으므로 실제 계약·사용 패턴에 맞게 교체한다.
 # Fireworks 모델은 Data Zone pay-per-token 단가이며 세금, 할인, 계약 단가는 반영하지 않는다.
 # Retail Prices API: https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices
-# Kimi K3: https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-kimi-k3-through-fireworks-ai-on-microsoft-foundry/4540187
+# Grok 4.6: https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-grok
+# Grok pricing: https://azure.microsoft.com/pricing/details/ai-foundry-models/grok/
 model_pricing_usd_per_million = {
   "gpt-5.6-sol" = {
     input  = 5.00
@@ -69,64 +70,67 @@ model_pricing_usd_per_million = {
     input  = 1.54
     output = 4.84
   }
-  "FW-Kimi-K3" = {
-    input  = 3.30
-    output = 16.50
+  "grok-4.6" = {
+    input  = 2.00
+    output = 6.00
   }
 }
 
 # null은 model_deployments가 비어 있으면 계정을 만들지 않고, 나중에 모델이 추가되면 자동 생성한다.
 # 마지막 관리형 모델 제거 후 빈 계정을 유지하려면 제거 전에 true로 변경한다.
 managed_foundry_account_enabled = null
-model_deployments               = {}
 
-# 나중에 Terraform 관리 모델을 추가하면 같은 apply에서 전용 Foundry 계정과 배포가 생성된다.
-# model_deployments = {
-#   "new-model" = {
-#     model_name             = "new-model"
-#     model_format           = "OpenAI"
-#     model_version          = "<version>"
-#     version_upgrade_option = "NoAutoUpgrade"
-#     sku_name               = "GlobalStandard"
-#     capacity               = 500
-#     opencode_api           = "responses"
-#     context_window         = 1048576
-#     tools                  = true
-#     streaming              = true
-#   }
-# }
-
-# 기존 Foundry 프로젝트 endpoint로 노출된 모델 배포를 연결한다.
-# Terraform은 프로젝트 endpoint를 조회하고 APIM 관리 ID에 Foundry User 역할을 할당하지만,
-# 원본 모델 배포를 생성·수정·재생성하지 않는다. capacity_tpm은 실제 quota 설정이 아니라
-# Workbook의 사용률과 여유량 계산에 사용하는 기준값이므로 실제 배포 TPM과 동일하게 입력한다.
-# 아래 map key는 해당 프로젝트에 이미 존재하는 deployment 이름과 정확히 일치해야 한다.
-# 기존 Foundry 프로젝트의 ARM resource ID 조회:
-#   az cognitiveservices account project show --name <foundry-resource-name> --project-name <project-name> --resource-group <resource-group-name> --query id -o tsv
-project_model_deployments = {
+# 이 스택이 Foundry 계정과 deployment를 만든다. eastus2 카탈로그 기준 버전이다.
+# Grok 4.6은 Global Standard만 지원한다.
+# https://learn.microsoft.com/azure/foundry/foundry-models/how-to/use-foundry-models-grok
+model_deployments = {
   "gpt-5.6-sol" = {
-    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
-    capacity_tpm        = 500000
-    opencode_api        = "responses"
+    model_name    = "gpt-5.6-sol"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
+    sku_name      = "GlobalStandard"
+    capacity      = 1000
+    opencode_api  = "responses"
   }
   "gpt-5.6-terra" = {
-    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
-    capacity_tpm        = 500000
-    opencode_api        = "responses"
+    model_name    = "gpt-5.6-terra"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
+    sku_name      = "GlobalStandard"
+    capacity      = 1000
+    opencode_api  = "responses"
   }
   "gpt-5.6-luna" = {
-    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
-    capacity_tpm        = 500000
-    opencode_api        = "responses"
+    model_name    = "gpt-5.6-luna"
+    model_format  = "OpenAI"
+    model_version = "2026-07-09"
+    sku_name      = "GlobalStandard"
+    capacity      = 1000
+    opencode_api  = "responses"
   }
   "FW-GLM-5.2" = {
-    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
-    capacity_tpm        = 200000
-    opencode_api        = "chat"
+    model_name    = "FW-GLM-5.2"
+    model_format  = "Fireworks"
+    model_version = "1"
+    sku_name      = "DataZoneStandard"
+    capacity      = 150
+    opencode_api  = "chat"
   }
-  "FW-Kimi-K3" = {
-    project_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-existing/providers/Microsoft.CognitiveServices/accounts/ais-existing/projects/project-name"
-    capacity_tpm        = 300000
-    opencode_api        = "chat"
+  "grok-4.6" = {
+    model_name      = "grok-4.6"
+    model_format    = "xAI"
+    model_version   = "1"
+    sku_name        = "GlobalStandard"
+    capacity        = 500
+    opencode_api    = "responses"
+    context_window  = 200000
+    tools           = true
+    streaming       = true
   }
 }
+
+# 기존 Foundry 프로젝트 모델을 연결할 때만 채운다. 이 스택이 모델을 만들면 빈 map으로 둔다.
+# placeholder project ID를 그대로 apply하면 lookup이 실패한다.
+# 기존 프로젝트 ARM ID 조회:
+#   az cognitiveservices account project show --name <foundry-resource-name> --project-name <project-name> --resource-group <resource-group-name> --query id -o tsv
+project_model_deployments = {}
