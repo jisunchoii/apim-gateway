@@ -1,6 +1,8 @@
 # LLM Gateway 운영 문서
 
 > 고객 연결 방법과 API 사용 예시는 [고객 사용 안내](../README.md)를 참고합니다.
+> Claude Code에서 GPT/OSS 모델을 쓰는 전체 구축은
+> [온보딩 가이드](claude-code-gpt-oss-onboarding.md)를 참고합니다.
 > 아래 명령은 별도 설명이 없으면 저장소 루트에서 실행합니다.
 
 APIM 앞단에서 OIDC 토큰을 검증하고, 라우팅된 모델만 통과시키고, 사용자별 토큰 사용량을 집계하는
@@ -22,20 +24,20 @@ OpenAI 호환 LLM 게이트웨이입니다.
 | 관심사 | 구현 | 변경 방법 |
 |---|---|---|
 | 인증 | 최종 사용자 `validate-jwt`, 서비스 계정 API-scoped subscription | tfvars `oidc_provider` / APIM subscription |
-| 인가 | `required-claims`로 Keycloak `scope`와 client role 검증 | tfvars `required_scope`, `required_role` / realm 사용자 관리 |
+| 인가 | `required-claims`로 OIDC `scope`와 role claim 검증 | tfvars `required_scope`, `required_role` / provider 사용자 관리 |
 | 모델 라우팅 | `routed_models`별 backend 선택, 미지원 모델 403 | Terraform |
 | 사용량·비용 | resource log 2개 테이블 조인 + Workbook | Terraform / Azure Monitor |
 | 백엔드 보호 | 모델별 backend circuit breaker (429) | `main.tf` |
 
 최종 사용자 API에서 APIM은 discovery document의 서명 키와 issuer, `aud=llm-gateway-api`,
-`scope=llm-gateway`, `llm_gateway_roles=invoke`를 모두 확인합니다. Keycloak realm에는 Gateway
-사용이 승인된 사용자 또는 그룹에 `llm-gateway-api/invoke` client role을 할당해야 합니다.
-Terminal client는 public client이며 Device Authorization Grant만 사용합니다. 서비스 API는
-Keycloak을 거치지 않고 APIM이 API 범위 subscription key를 검증합니다.
+`scope=llm-gateway`, `llm_gateway_roles=invoke`를 모두 확인합니다. OIDC provider는 Gateway
+사용이 승인된 사용자의 access token에 이 claim 계약을 제공해야 합니다. Terminal client는
+public client이며 Device Authorization Grant를 사용합니다. 서비스 API는 사용자 OIDC provider를
+거치지 않고 APIM이 API 범위 subscription key를 검증합니다.
 
 ### APIM policy 처리 순서
 
-1. 최종 사용자 API는 Keycloak JWT를 검증하고, 서비스 API는 APIM subscription을 검증합니다.
+1. 최종 사용자 API는 OIDC JWT를 검증하고, 서비스 API는 APIM subscription을 검증합니다.
 2. 클라이언트가 전달한 API key와 APIM 구독 키를 제거합니다.
 3. 사용자 `iss:sub` 또는 서비스 subscription ID 기반 가명 ID와 표시 label을 trace에 기록합니다.
 4. JSON 본문과 `model` 필드를 검증하고 지원하지 않는 모델은 `403`으로 종료합니다.
@@ -52,7 +54,7 @@ Keycloak을 거치지 않고 APIM이 API 범위 subscription key를 검증합니
 |---|---|
 | 도구 | Azure CLI, Terraform, Bash, Python 3, Node.js |
 | Azure 인증 | `az login`을 실행하고 배포 대상 구독을 선택합니다. |
-| Keycloak | [Keycloak Admin Console 가이드](keycloak-admin-guide.md)의 구성을 완료합니다. |
+| OIDC provider | [Okta 가이드](okta-admin-guide.md)의 구성을 완료합니다. |
 | Terraform 입력 | `terraform.tfvars.example`을 복사하고 환경 값을 입력합니다. |
 
 ```bash
@@ -121,7 +123,7 @@ Azure Portal에서 **API Management → Subscriptions → Add subscription**을 
 서비스에는 primary 또는 secondary key 하나만 전달합니다. GitHub Actions에서는 repository 또는
 environment secret에 `LLMGW_SUBSCRIPTION_KEY`로 저장하고, Azure 워크로드에서는
 [Azure Key Vault](https://learn.microsoft.com/azure/key-vault/general/overview)에 저장한 뒤
-실행 시 환경변수로 주입합니다. 요청은 `Ocp-Apim-Subscription-Key` header를 사용하며 Keycloak
+실행 시 환경변수로 주입합니다. 요청은 `Ocp-Apim-Subscription-Key` header를 사용하며 사용자 OIDC
 bearer token은 필요하지 않습니다. 서비스별 사용량과 제한 counter는 subscription ID 기준으로
 분리되고 Workbook에는 subscription 이름이 사용자 label로 표시됩니다.
 
@@ -143,8 +145,6 @@ subscription은 사용하지 않습니다.
 | `project_model_deployments` | 다른 Foundry 프로젝트에 이미 존재하는 모델 연결 |
 | `managed_foundry_account_enabled` | `null` 자동 생성, `true` 빈 계정 유지, `false` 관리형 계정 비활성화 |
 | `routed_models` | APIM policy가 요청을 전달할 모델 목록 |
-| `opencode_default_model` | OpenCode 시작 시 선택할 routed model |
-| `opencode_small_model` | OpenCode 경량 작업에 사용할 routed model |
 
 `routed_models`를 생략하면 배포된 모든 모델을 라우팅합니다.
 각 deployment의 `opencode_api`는 `responses` 또는 `chat`이며, 관리형 모델은 Responses,
@@ -271,8 +271,8 @@ model_pricing_usd_per_million = {
 
 값을 변경한 뒤 `terraform apply`를 실행하면 Workbook의 비용 계산식에 반영됩니다.
 
-Workbook은 Keycloak username을 표시하고 동일 사용자의 안정적인 집계·join에는 64자 해시를
-사용합니다. username claim이 없는 과거 로그는 해시 앞 12자리로 표시됩니다. 401은 JWT 검증
+Workbook은 OIDC user label을 표시하고 동일 사용자의 안정적인 집계·join에는 64자 해시를
+사용합니다. user label claim이 없는 과거 로그는 해시 앞 12자리로 표시됩니다. 401은 JWT 검증
 전에 종료되므로 anonymous가 정상이며, 인증된 400/403은 정책 trace를 검증보다 먼저 기록해
 사용자에게 귀속합니다. APIM
 Capacity 차트는 Azure Monitor Metrics를 직접 조회합니다. Gateway CPU/Memory metric은 APIM v2
@@ -288,7 +288,7 @@ SKU 전용이므로 현재 classic SKU에서는 Capacity만 표시됩니다.
 토큰 수는 `ApiManagementGatewayLlmLog`, 사용자는 정책의 `trace`가 남기는
 `ApiManagementGatewayLogs.TraceRecords`에 들어갑니다. 둘은 `CorrelationId`로 조인합니다.
 
-집계 키는 Keycloak의 `iss:sub`를 SHA-256으로 해시한 값입니다. Workbook 표시용으로는
+집계 키는 OIDC token의 `iss:sub`를 SHA-256으로 해시한 값입니다. Workbook 표시용으로는
 `oidc_provider.user_label_claim`의 username을 별도 `userLabel` metadata에 기록합니다.
 email과 원본 subject는 로그에 남기지 않습니다. username도 식별 정보이므로 Log Analytics와
 Workbook 접근 권한 및 보존 기간을 제한합니다.

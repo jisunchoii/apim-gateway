@@ -129,6 +129,9 @@ variable "model_deployments" {
     sku_name               = string
     capacity               = number
     opencode_api           = optional(string, "responses")
+    context_window         = optional(number)
+    tools                  = optional(bool)
+    streaming              = optional(bool)
   }))
   description = <<-EOT
     Model deployments keyed by deployment name. Keep the deployment name identical to the model name so
@@ -137,6 +140,8 @@ variable "model_deployments" {
     region's granted quota, which defaults to single-digit millions. Check with
     `az cognitiveservices usage list -l <region> -o table` and request an increase before raising it.
     opencode_api selects the OpenCode provider protocol and defaults to responses.
+    context_window, tools, and streaming are optional client catalog metadata. Do not guess
+    context windows; omit them unless the model publisher documents a value.
   EOT
 
   validation {
@@ -165,6 +170,17 @@ variable "model_deployments" {
     ])
     error_message = "Every managed model opencode_api must be responses or chat."
   }
+
+  validation {
+    condition = alltrue([
+      for deployment in values(var.model_deployments) :
+      deployment.context_window == null || (
+        deployment.context_window > 0 &&
+        floor(deployment.context_window) == deployment.context_window
+      )
+    ])
+    error_message = "Every managed model context_window must be a positive whole number when set."
+  }
 }
 
 variable "project_model_deployments" {
@@ -172,6 +188,9 @@ variable "project_model_deployments" {
     project_resource_id = string
     capacity_tpm        = number
     opencode_api        = optional(string, "chat")
+    context_window      = optional(number)
+    tools               = optional(bool)
+    streaming           = optional(bool)
   }))
   default     = {}
   description = <<-EOT
@@ -179,7 +198,8 @@ variable "project_model_deployments" {
     project but does not own or recreate the model deployment. The map key is the deployment name sent
     by clients. capacity_tpm is the deployment's effective token-per-minute limit used by governance
     dashboards; keep it aligned with the deployment owned by the source project. opencode_api selects
-    the OpenCode provider protocol and defaults to chat.
+    the OpenCode provider protocol and defaults to chat. context_window, tools, and streaming
+    are optional client catalog metadata. Do not guess context windows.
   EOT
 
   validation {
@@ -217,6 +237,17 @@ variable "project_model_deployments" {
   }
 
   validation {
+    condition = alltrue([
+      for deployment in values(var.project_model_deployments) :
+      deployment.context_window == null || (
+        deployment.context_window > 0 &&
+        floor(deployment.context_window) == deployment.context_window
+      )
+    ])
+    error_message = "Every project model context_window must be a positive whole number when set."
+  }
+
+  validation {
     condition = length(setintersection(
       toset(keys(var.project_model_deployments)),
       toset(keys(var.model_deployments))
@@ -241,20 +272,6 @@ variable "routed_models" {
   }
 }
 
-variable "opencode_default_model" {
-  type        = string
-  default     = null
-  nullable    = true
-  description = "Optional routed model selected as the OpenCode default. Null selects the first routed model."
-}
-
-variable "opencode_small_model" {
-  type        = string
-  default     = null
-  nullable    = true
-  description = "Optional routed model selected as the OpenCode small model. Null selects the second routed model."
-}
-
 variable "oidc_provider" {
   type = object({
     openid_config_url = string
@@ -269,18 +286,18 @@ variable "oidc_provider" {
     user_label_claim  = string
   })
   description = <<-EOT
-    Keycloak settings for end-user access to the gateway. APIM validate-jwt reads signing keys and issuer
+    OIDC provider settings for end-user access to the gateway. APIM validate-jwt reads signing keys and issuer
     metadata from openid_config_url. The terminal clients use a public client with Device Authorization Grant.
 
       openid_config_url  Discovery document, ending in /.well-known/openid-configuration.
-      audience           The API audience mapper adds this value to the access token's `aud` claim.
+      audience           Value expected in the access token's `aud` claim.
       issuer             Optional extra check on the `iss` claim. Leave empty to accept whatever the
                          discovery document advertises. When set, it must match the token exactly.
-      client_id          Public Keycloak client used by OpenCode and command-line token helpers.
+      client_id          Public OIDC client used by terminal clients.
       client_scope       Space-delimited scopes requested during device authorization.
       required_scope     Scope the access token must carry. Set to "" to skip scope authorization.
-      scope_claim        Claim holding the scopes. Keycloak uses the standard `scope` claim.
-      role_claim         Claim holding Gateway client roles. The supplied realm uses `llm_gateway_roles`.
+      scope_claim        Claim holding the scopes. OAuth providers normally use the standard `scope` claim.
+      role_claim         Claim holding Gateway roles. The test providers use `llm_gateway_roles`.
       required_role      Role required to invoke the Gateway. Set to "" to skip role authorization.
       user_label_claim   Claim containing the username displayed in the Workbook.
   EOT

@@ -85,14 +85,6 @@ locals {
     model_name => local.model_targets[model_name].auth_resource
     if contains(local.deployed_models, model_name)
   }
-  opencode_responses_models = [
-    for model_name in local.routed_models :
-    model_name if try(local.model_targets[model_name].opencode_api == "responses", false)
-  ]
-  opencode_chat_models = [
-    for model_name in local.routed_models :
-    model_name if try(local.model_targets[model_name].opencode_api == "chat", false)
-  ]
   api_catalog_models = [
     for model_name in local.routed_models : {
       name             = model_name
@@ -110,6 +102,9 @@ locals {
       capacity_units   = try(var.model_deployments[model_name].capacity, null)
       rai_policy_name  = try(var.model_deployments[model_name].rai_policy_name, null)
       project_resource = try(var.project_model_deployments[model_name].project_resource_id, null)
+      context_window   = try(var.model_deployments[model_name].context_window, var.project_model_deployments[model_name].context_window, null)
+      tools            = try(var.model_deployments[model_name].tools, var.project_model_deployments[model_name].tools, null)
+      streaming        = try(var.model_deployments[model_name].streaming, var.project_model_deployments[model_name].streaming, null)
     }
   ]
 

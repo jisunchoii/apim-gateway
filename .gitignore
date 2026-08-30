@@ -14,9 +14,11 @@ infra/backend.tf
 !*.tfvars.example
 
 .env
+node_modules/
 
-# 로컬 통합 테스트용 Terraform과 Keycloak 실행 자산
+# 로컬 통합 테스트용 Terraform 실행 자산
 /test-infra/
+/tests
 
 # 로컬 실행 결과 디렉터리
 /run-*/
@@ -26,4 +28,3 @@ infra/backend.tf
 /scripts/**/*.test.js
 
 .llmgw/
-keycloak-token.json

@@ -3,10 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check scripts/keycloak/device-flow-logger.js && node --check scripts/keycloak/keycloak-device-auth.js && node --check scripts/keycloak/terraform-settings.js && node --check scripts/keycloak/keycloak-token.js && node --check scripts/keycloak/opencode-keycloak-hook.js && node --check scripts/generate-model-gateway-registry.mjs",
+    "check": "node --check scripts/oidc/device-flow-logger.js && node --check scripts/oidc/device-credential.js && node --check scripts/oidc/file-token-store.js && node --check scripts/oidc/terraform-settings.js && node --check scripts/oidc/client-profile.js && node --check scripts/oidc/providers.js && node --check scripts/oidc/providers/okta.js && node --check scripts/okta/claude-credential.js && node --check scripts/okta/okta-auth-proxy.js && node --check scripts/okta/claude.js && node --check scripts/okta/claude-settings.js && node --check scripts/okta/hooks/session-start.js && node --check scripts/okta/down.js && node --check scripts/okta/runtime-fingerprint.js && node --check scripts/okta/doctor.js && node --check scripts/opencodex/configure-okta-gateway.js && node --check scripts/claude/cli.js && node --check scripts/generate-model-gateway-registry.mjs",
+    "test": "node --test tests/*.test.js",
+    "claude": "node scripts/claude/cli.js",
+    "claude:configure": "node scripts/claude/cli.js configure",
+    "claude:doctor": "node scripts/claude/cli.js doctor",
+    "claude:restart": "node scripts/claude/cli.js restart",
+    "claude:down": "node scripts/claude/cli.js down",
+    "claude:okta": "node scripts/claude/cli.js",
+    "claude:okta:configure": "node scripts/claude/cli.js configure",
+    "claude:okta:proxy": "node scripts/okta/okta-auth-proxy.js",
+    "claude:okta:doctor": "node scripts/claude/cli.js doctor",
+    "claude:okta:down": "node scripts/claude/cli.js down",
     "generate:registry": "node scripts/generate-model-gateway-registry.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@bitkyc08/opencodex": "2.28.0"
   }
 }

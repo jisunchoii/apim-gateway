@@ -303,7 +303,7 @@ locals {
         type = 1
         name = "users-heading"
         content = {
-          json = "## Users\nKeycloak username별 점유율, burst, 오류와 모델 사용을 확인합니다. 집계 키는 가명 처리된 사용자 ID를 유지합니다."
+          json = "## Users\nOIDC user label별 점유율, burst, 오류와 모델 사용을 확인합니다. 집계 키는 가명 처리된 사용자 ID를 유지합니다."
         }
       },
       {

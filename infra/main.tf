@@ -184,7 +184,7 @@ resource "azurerm_api_management_api" "gateway" {
   path                = "openai/v1"
   protocols           = ["https"]
 
-  # 이 API에는 subscription key를 발급하지 않는다. 따라서 Keycloak access token이 없는 요청은
+  # 이 API에는 subscription key를 발급하지 않는다. 따라서 유효한 OIDC access token이 없는 요청은
   # 다른 인증 경로로 우회할 수 없다.
   subscription_required = false
 }
@@ -198,7 +198,7 @@ resource "azurerm_api_management_api" "service_gateway" {
   path                = "service/openai/v1"
   protocols           = ["https"]
 
-  # APIM이 policy 실행 전에 API 범위 subscription key를 검증한다. Keycloak JWT는 요구하지 않는다.
+  # APIM이 policy 실행 전에 API 범위 subscription key를 검증한다. 사용자 OIDC JWT는 요구하지 않는다.
   subscription_required = true
 }
 
@@ -321,22 +321,6 @@ resource "azurerm_api_management_api_policy" "gateway" {
     precondition {
       condition     = length(local.undeployed_routed) == 0
       error_message = "routed_models contains models with no deployment: ${join(", ", local.undeployed_routed)}."
-    }
-
-    precondition {
-      condition = (
-        var.opencode_default_model == null ||
-        contains(local.routed_models, var.opencode_default_model)
-      )
-      error_message = "opencode_default_model must be null or reference a routed model."
-    }
-
-    precondition {
-      condition = (
-        var.opencode_small_model == null ||
-        contains(local.routed_models, var.opencode_small_model)
-      )
-      error_message = "opencode_small_model must be null or reference a routed model."
     }
   }
 

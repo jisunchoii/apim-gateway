@@ -1,6 +1,16 @@
 const deviceGrantType = "urn:ietf:params:oauth:grant-type:device_code"
 const defaultRefreshSkewMs = 60_000
 
+export const AUTH_INTERACTIVE_REQUIRED = "AUTH_INTERACTIVE_REQUIRED"
+
+const interactiveRequiredError = (providerName) => {
+  const error = new Error(
+    `${providerName} login required. Restart Claude Code to sign in.`,
+  )
+  error.code = AUTH_INTERACTIVE_REQUIRED
+  return error
+}
+
 const wait = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -29,14 +39,35 @@ const postForm = async (fetchImpl, url, values) => {
   }
 }
 
-const normalizeTokenSet = (payload, previousRefreshToken, now) => {
+const providerError = (providerName, message) =>
+  new Error(`${providerName} ${message}`)
+
+const requireHttpUrl = (providerName, value, fieldName) => {
+  let parsed
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw providerError(providerName, `returned an invalid ${fieldName}.`)
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw providerError(providerName, `returned an invalid ${fieldName}.`)
+  }
+  return parsed.href
+}
+
+const normalizeTokenSet = (
+  providerName,
+  payload,
+  previousRefreshToken,
+  now,
+) => {
   if (typeof payload.access_token !== "string" || !payload.access_token) {
-    throw new Error("Keycloak returned no access_token.")
+    throw providerError(providerName, "returned no access_token.")
   }
 
   const expiresIn = Number(payload.expires_in)
   if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
-    throw new Error("Keycloak returned an invalid expires_in value.")
+    throw providerError(providerName, "returned an invalid expires_in value.")
   }
 
   return {
@@ -59,10 +90,11 @@ const tokenError = (payload, fallback) => {
   return error
 }
 
-export const createKeycloakDeviceCredential = ({
+export const createOidcDeviceCredential = ({
+  providerName = "OIDC provider",
   discoveryUrl,
   clientId,
-  scope = "openid llm-gateway",
+  scope = "openid",
   fetchImpl = globalThis.fetch,
   logger = (message) => console.error(message),
   now = Date.now,
@@ -70,11 +102,15 @@ export const createKeycloakDeviceCredential = ({
   refreshSkewMs = defaultRefreshSkewMs,
   tokenStore,
 }) => {
+  const label = String(providerName).trim() || "OIDC provider"
   if (!discoveryUrl) {
-    throw new Error("Keycloak discoveryUrl is required.")
+    throw providerError(label, "discoveryUrl is required.")
   }
   if (!clientId) {
-    throw new Error("Keycloak clientId is required.")
+    throw providerError(label, "clientId is required.")
+  }
+  if (!String(scope).trim()) {
+    throw providerError(label, "scope is required.")
   }
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required.")
@@ -93,18 +129,31 @@ export const createKeycloakDeviceCredential = ({
         if (!response.ok) {
           throw tokenError(
             metadata,
-            `Keycloak discovery failed with HTTP ${response.status}.`,
+            `${label} discovery failed with HTTP ${response.status}.`,
           )
         }
         if (
           typeof metadata.device_authorization_endpoint !== "string" ||
           typeof metadata.token_endpoint !== "string"
         ) {
-          throw new Error(
-            "Keycloak discovery does not advertise device_authorization_endpoint and token_endpoint.",
+          throw providerError(
+            label,
+            "discovery does not advertise device_authorization_endpoint and token_endpoint.",
           )
         }
-        return metadata
+        return {
+          ...metadata,
+          device_authorization_endpoint: requireHttpUrl(
+            label,
+            metadata.device_authorization_endpoint,
+            "device_authorization_endpoint",
+          ),
+          token_endpoint: requireHttpUrl(
+            label,
+            metadata.token_endpoint,
+            "token_endpoint",
+          ),
+        }
       })()
     }
     return discoveryPromise
@@ -128,22 +177,16 @@ export const createKeycloakDeviceCredential = ({
     if (storeLoaded) return
     storeLoaded = true
     const stored = await readStoredToken()
-    if (stored) {
-      tokenSet = stored
-    }
+    if (stored) tokenSet = stored
   }
 
   const persistToken = async () => {
-    if (tokenStore?.save) {
-      await tokenStore.save(tokenSet)
-    }
+    if (tokenStore?.save) await tokenStore.save(tokenSet)
   }
 
   const clearToken = async () => {
     tokenSet = undefined
-    if (tokenStore?.clear) {
-      await tokenStore.clear()
-    }
+    if (tokenStore?.clear) await tokenStore.clear()
   }
 
   const refresh = async (metadata) => {
@@ -159,11 +202,16 @@ export const createKeycloakDeviceCredential = ({
     if (!response.ok) {
       throw tokenError(
         payload,
-        `Keycloak refresh failed with HTTP ${response.status}.`,
+        `${label} refresh failed with HTTP ${response.status}.`,
       )
     }
 
-    tokenSet = normalizeTokenSet(payload, tokenSet.refreshToken, now)
+    tokenSet = normalizeTokenSet(
+      label,
+      payload,
+      tokenSet.refreshToken,
+      now,
+    )
     await persistToken()
     return tokenSet.accessToken
   }
@@ -180,7 +228,7 @@ export const createKeycloakDeviceCredential = ({
     if (!response.ok) {
       throw tokenError(
         payload,
-        `Keycloak device authorization failed with HTTP ${response.status}.`,
+        `${label} device authorization failed with HTTP ${response.status}.`,
       )
     }
     if (
@@ -188,23 +236,43 @@ export const createKeycloakDeviceCredential = ({
       typeof payload.user_code !== "string" ||
       typeof payload.verification_uri !== "string"
     ) {
-      throw new Error("Keycloak returned an invalid device authorization response.")
+      throw providerError(
+        label,
+        "returned an invalid device authorization response.",
+      )
+    }
+    const expiresIn = Number(payload.expires_in)
+    const interval = payload.interval === undefined ? 5 : Number(payload.interval)
+    if (
+      !Number.isFinite(expiresIn) ||
+      expiresIn <= 0 ||
+      !Number.isFinite(interval) ||
+      interval <= 0
+    ) {
+      throw providerError(
+        label,
+        "returned an invalid device authorization response.",
+      )
     }
 
     const verificationUrl =
       typeof payload.verification_uri_complete === "string"
-        ? payload.verification_uri_complete
-        : payload.verification_uri
+        ? requireHttpUrl(
+            label,
+            payload.verification_uri_complete,
+            "verification_uri_complete",
+          )
+        : requireHttpUrl(label, payload.verification_uri, "verification_uri")
     logger(
       [
-        "Keycloak 로그인이 필요합니다.",
+        `${label} 로그인이 필요합니다.`,
         `브라우저에서 다음 주소를 여세요: ${verificationUrl}`,
         `표시되는 경우 코드를 입력하세요: ${payload.user_code}`,
       ].join("\n"),
     )
 
-    let intervalSeconds = Math.max(Number(payload.interval) || 5, 1)
-    const expiresAt = now() + Math.max(Number(payload.expires_in) || 600, 1) * 1000
+    let intervalSeconds = interval
+    const expiresAt = now() + expiresIn * 1000
 
     while (now() < expiresAt) {
       await sleep(intervalSeconds * 1000)
@@ -214,7 +282,12 @@ export const createKeycloakDeviceCredential = ({
         client_id: clientId,
       })
       if (tokenResponse.response.ok) {
-        tokenSet = normalizeTokenSet(tokenResponse.payload, undefined, now)
+        tokenSet = normalizeTokenSet(
+          label,
+          tokenResponse.payload,
+          undefined,
+          now,
+        )
         await persistToken()
         return tokenSet.accessToken
       }
@@ -226,21 +299,24 @@ export const createKeycloakDeviceCredential = ({
           intervalSeconds += 5
           continue
         case "expired_token":
-          throw new Error("Keycloak device code expired before login completed.")
+          throw providerError(
+            label,
+            "device code expired before login completed.",
+          )
         case "access_denied":
-          throw new Error("Keycloak device login was denied.")
+          throw providerError(label, "device login was denied.")
         default:
           throw tokenError(
             tokenResponse.payload,
-            `Keycloak token polling failed with HTTP ${tokenResponse.response.status}.`,
+            `${label} token polling failed with HTTP ${tokenResponse.response.status}.`,
           )
       }
     }
 
-    throw new Error("Keycloak device code expired before login completed.")
+    throw providerError(label, "device code expired before login completed.")
   }
 
-  const acquire = async () => {
+  const acquire = async ({ interactive = true } = {}) => {
     await loadStoredToken()
     if (tokenSet?.accessToken && tokenSet.expiresAt - now() > refreshSkewMs) {
       return tokenSet.accessToken
@@ -253,8 +329,6 @@ export const createKeycloakDeviceCredential = ({
       } catch (error) {
         if (error.code !== "invalid_grant") throw error
         const failedRefreshToken = tokenSet.refreshToken
-        // Another process may have rotated the refresh token via the shared
-        // store; adopt it before falling back to device authorization.
         const reloaded = await readStoredToken()
         if (reloaded && reloaded.refreshToken !== failedRefreshToken) {
           tokenSet = reloaded
@@ -275,18 +349,38 @@ export const createKeycloakDeviceCredential = ({
         await clearToken()
       }
     }
+    if (!interactive) throw interactiveRequiredError(label)
     return authorizeDevice(metadata)
   }
 
-  return {
-    getToken: async () => {
-      if (!acquirePromise) {
-        acquirePromise = acquire().finally(() => {
-          acquirePromise = undefined
-        })
+  const forceRefresh = async ({ interactive = false } = {}) => {
+    await loadStoredToken()
+    const metadata = await discover()
+    if (tokenSet?.refreshToken) {
+      try {
+        return await refresh(metadata)
+      } catch (error) {
+        if (error.code !== "invalid_grant") throw error
+        await clearToken()
       }
-      return acquirePromise
-    },
+    }
+    if (!interactive) throw interactiveRequiredError(label)
+    return authorizeDevice(metadata)
+  }
+
+  const runExclusive = (work) => {
+    if (!acquirePromise) {
+      acquirePromise = work().finally(() => {
+        acquirePromise = undefined
+      })
+    }
+    return acquirePromise
+  }
+
+  return {
+    getToken: async (options = {}) => runExclusive(() => acquire(options)),
+    forceRefresh: async (options = {}) =>
+      runExclusive(() => forceRefresh(options)),
     clear: clearToken,
   }
 }

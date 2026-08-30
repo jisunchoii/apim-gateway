@@ -16,15 +16,16 @@ apim_publisher_email = "platform-team@example.com"
 # 이후 unit 증설은 서비스 중단 없이 적용할 수 있다.
 apim_sku = "Premium_1"
 
-# Keycloak 최종 사용자 인증 설정이다. APIM에서 아래 HTTPS discovery URL에 접근할 수 있어야 한다.
+# Okta 테스트 최종 사용자 인증 설정이다. Custom Authorization Server와 Native App에서
+# Device Authorization 및 Refresh Token grant를 활성화해야 한다.
 oidc_provider = {
-  openid_config_url = "https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
+  openid_config_url = "https://<okta-domain>/oauth2/<authorization-server-id>/.well-known/openid-configuration"
   audience          = "llm-gateway-api"
-  issuer            = "https://<keycloak-host>/realms/<realm>"
-  client_id         = "llm-gateway-cli"
-  client_scope      = "openid llm-gateway"
+  issuer            = "https://<okta-domain>/oauth2/<authorization-server-id>"
+  client_id         = "<okta-native-app-client-id>"
+  client_scope      = "openid offline_access llm-gateway"
   required_scope    = "llm-gateway"
-  scope_claim       = "scope"
+  scope_claim       = "scp"
   role_claim        = "llm_gateway_roles"
   required_role     = "invoke"
   user_label_claim  = "llm_gateway_user"
@@ -44,10 +45,6 @@ routed_models = [
   "FW-GLM-5.2",
   "FW-Kimi-K3",
 ]
-
-# OpenCode 기본 모델도 routed_models 안의 deployment 이름으로 지정한다.
-opencode_default_model = "gpt-5.6-sol"
-opencode_small_model   = "gpt-5.6-luna"
 
 # 거버넌스 Workbook의 선택적 비용 추정 단가다. 아래 값은 2026-08-04 공개 USD retail 단가다.
 # GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 일반 input/output 단가다.
@@ -93,6 +90,9 @@ model_deployments               = {}
 #     sku_name               = "GlobalStandard"
 #     capacity               = 500
 #     opencode_api           = "responses"
+#     context_window         = 1048576
+#     tools                  = true
+#     streaming              = true
 #   }
 # }
 

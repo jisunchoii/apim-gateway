@@ -39,7 +39,7 @@ output "oidc_openid_config_url" {
 }
 
 output "oidc_client_id" {
-  description = "Public Keycloak client ID used by terminal clients."
+  description = "Public OIDC client ID used by terminal clients."
   value       = var.oidc_provider.client_id
 }
 
@@ -54,12 +54,12 @@ output "oidc_required_scope" {
 }
 
 output "oidc_role_claim" {
-  description = "Access-token claim containing Keycloak Gateway client roles."
+  description = "Access-token claim containing Gateway roles."
   value       = var.oidc_provider.role_claim
 }
 
 output "oidc_required_role" {
-  description = "Keycloak client role required by the APIM validate-jwt policy."
+  description = "Role required by the APIM validate-jwt policy."
   value       = var.oidc_provider.required_role
 }
 
@@ -88,19 +88,6 @@ output "routed_models" {
   value       = local.routed_models
 }
 
-output "opencode_model_config" {
-  description = "OpenCode provider groups and defaults derived from each routed model's opencode_api."
-  value = {
-    responses_models = local.opencode_responses_models
-    chat_models      = local.opencode_chat_models
-    default_model    = coalesce(var.opencode_default_model, local.routed_models[0])
-    small_model = coalesce(
-      var.opencode_small_model,
-      try(local.routed_models[1], local.routed_models[0])
-    )
-  }
-}
-
 output "api_catalog_manifest" {
   description = "Non-secret deployment catalog consumed by the generated Model Gateway Registry HTML."
   value = {
@@ -117,6 +104,32 @@ output "api_catalog_manifest" {
       role     = "Cognitive Services User"
     }
     models = local.api_catalog_models
+  }
+}
+
+output "client_profile" {
+  description = "Non-secret connection profile for Claude Code and other terminal clients. Contains no tokens or secrets."
+  value = {
+    schema_version   = 1
+    gateway_base_url = "${azurerm_api_management.apim.gateway_url}/openai/v1"
+    oidc = {
+      discovery_url  = var.oidc_provider.openid_config_url
+      client_id      = var.oidc_provider.client_id
+      scope          = var.oidc_provider.client_scope
+      audience       = var.oidc_provider.audience
+      required_scope = var.oidc_provider.required_scope
+      role_claim     = var.oidc_provider.role_claim
+      required_role  = var.oidc_provider.required_role
+    }
+    models = [
+      for model in local.api_catalog_models : {
+        name           = model.name
+        api            = model.api
+        context_window = model.context_window
+        tools          = model.tools
+        streaming      = model.streaming
+      }
+    ]
   }
 }
 
