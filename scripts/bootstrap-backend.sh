@@ -1,11 +1,96 @@
 #!/usr/bin/env bash
 # Creates or reconciles the Azure Blob backend used for Terraform state.
 # Entra ID auth only: shared keys are disabled and state access is assigned with Azure RBAC.
-# The storage account name is deterministic for the subscription, prefix, environment, and region.
+# The storage account name is deterministic for the subscription, stack, prefix, environment, and region.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-tfvars_file="${TFVARS_FILE:-$script_dir/../infra/terraform.tfvars}"
+terraform_dir="$script_dir/../infra"
+tfvars_file="${TFVARS_FILE:-}"
+state_stack="${TF_STATE_STACK:-}"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/bootstrap-backend.sh [options]
+
+Options:
+  --terraform-dir <path>  Terraform root that receives backend.tf
+  --tfvars-file <path>    Variable file used to derive names and tags
+  --state-stack <name>     State discriminator (default: classic or root directory name)
+  -h, --help              Show this help
+EOF
+}
+
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" ]]; then
+    echo "FAIL  $option requires a path." >&2
+    usage >&2
+    exit 2
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --terraform-dir)
+      require_value "$1" "${2:-}"
+      terraform_dir="$2"
+      shift 2
+      ;;
+    --tfvars-file)
+      require_value "$1" "${2:-}"
+      tfvars_file="$2"
+      shift 2
+      ;;
+    --state-stack)
+      require_value "$1" "${2:-}"
+      state_stack="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "FAIL  unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ ! -d "$terraform_dir" ]]; then
+  echo "FAIL  Terraform directory does not exist: $terraform_dir" >&2
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "FAIL  node is not available in PATH." >&2
+  exit 1
+fi
+
+terraform_dir="$(cd "$terraform_dir" && pwd)"
+if [[ -z "$state_stack" ]]; then
+  if [[ "$(basename "$terraform_dir")" == "infra" ]]; then
+    state_stack="classic"
+  else
+    state_stack=$(basename "$terraform_dir" |
+      tr '[:upper:]' '[:lower:]' |
+      tr -cd 'a-z0-9-')
+  fi
+fi
+if [[ -z "$state_stack" ||
+      ${#state_stack} -gt 24 ||
+      ! "$state_stack" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+  echo "FAIL  state stack must be at most 24 lowercase alphanumeric or hyphen characters." >&2
+  exit 2
+fi
+
+if [[ -z "$tfvars_file" ]]; then
+  tfvars_file="$terraform_dir/terraform.tfvars"
+else
+  tfvars_file="$(cd "$(dirname "$tfvars_file")" && pwd)/$(basename "$tfvars_file")"
+fi
 
 tfvars_value() {
   local key="$1"
@@ -16,7 +101,15 @@ tfvars_value() {
 
 prefix="${PREFIX:-${TF_VAR_prefix:-$(tfvars_value prefix)}}"
 env="${ENV:-${TF_VAR_env:-$(tfvars_value env)}}"
-location="${LOCATION:-${TF_VAR_location:-$(tfvars_value location)}}"
+if [[ -n "${LOCATION:-}" ]]; then
+  location="$LOCATION"
+elif [[ "$state_stack" != "classic" ]]; then
+  location="${TF_VAR_apim_location:-$(tfvars_value apim_location)}"
+  location="${location:-${TF_VAR_location:-$(tfvars_value location)}}"
+else
+  location="${TF_VAR_location:-$(tfvars_value location)}"
+  location="${location:-${TF_VAR_apim_location:-$(tfvars_value apim_location)}}"
+fi
 owner="${OWNER:-${TF_VAR_owner:-$(tfvars_value owner)}}"
 cost_center="${COST_CENTER:-${TF_VAR_cost_center:-$(tfvars_value cost_center)}}"
 retention_days="${STATE_RETENTION_DAYS:-30}"
@@ -33,16 +126,15 @@ if [[ ! "$retention_days" =~ ^[0-9]+$ ]] ||
   exit 2
 fi
 
-rg="rg-${prefix}-tfstate-${env}-${location}"
-backend_tf="$script_dir/../infra/backend.tf"
-local_state="$script_dir/../infra/terraform.tfstate"
+backend_tf="$terraform_dir/backend.tf"
+local_state="$terraform_dir/terraform.tfstate"
 container="tfstate"
-state_key="${prefix}-${env}.tfstate"
-tag_value="${prefix}-${env}"
+tag_value="${prefix}-${env}-${state_stack}"
 tags=(
   "tfstate=$tag_value"
   "env=$env"
   "workload=$prefix"
+  "stack=$state_stack"
   "owner=$owner"
   "costCenter=$cost_center"
 )
@@ -62,14 +154,24 @@ if ! subscription_id=$(az account show --query id -o tsv 2>/dev/null) ||
   exit 1
 fi
 
+if [[ "$state_stack" == "classic" ]]; then
+  rg="rg-${prefix}-tfstate-${env}-${location}"
+  state_key="${prefix}-${env}.tfstate"
+  state_identity="$subscription_id|$prefix|$env|$location"
+else
+  rg="rg-${prefix}-tfstate-${env}-${state_stack}-${location}"
+  state_key="${prefix}-${env}-${state_stack}.tfstate"
+  state_identity="$subscription_id|$prefix|$env|$state_stack|$location"
+fi
+
 storage_prefix=$(printf '%s' "$prefix" |
   tr '[:upper:]' '[:lower:]' |
   tr -cd 'a-z0-9' |
   cut -c1-8)
 storage_prefix="${storage_prefix:-gw}"
-suffix=$(python3 -c \
-  'import hashlib, sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:10])' \
-  "$subscription_id|$prefix|$env|$location")
+suffix=$(node -p \
+  "require('crypto').createHash('sha256').update(process.argv[1]).digest('hex').slice(0, 10)" \
+  "$state_identity")
 sa="st${storage_prefix}tf${suffix}"
 
 backend_value() {
@@ -115,7 +217,11 @@ fi
 
 # Reconcile tags and security settings even when the account already existed.
 rg_id=$(az group show --name "$rg" --query id -o tsv)
-az tag update --resource-id "$rg_id" --operation Merge --tags "${tags[@]}" --output none
+MSYS_NO_PATHCONV=1 az tag update \
+  --resource-id "$rg_id" \
+  --operation Merge \
+  --tags "${tags[@]}" \
+  --output none
 
 az storage account update \
   --name "$sa" \
@@ -126,8 +232,24 @@ az storage account update \
   --public-network-access Enabled \
   --output none
 
+public_network_access=$(az storage account show \
+  --name "$sa" \
+  --resource-group "$rg" \
+  --query publicNetworkAccess \
+  -o tsv)
+if [[ "$public_network_access" != "Enabled" ]]; then
+  echo "FAIL  storage public network access is $public_network_access after update." >&2
+  echo "      An Azure Policy may require private endpoint or network security perimeter access." >&2
+  echo "      Configure an approved data-plane path from this runner before using Azure Blob state." >&2
+  exit 1
+fi
+
 sa_id=$(az storage account show --name "$sa" --resource-group "$rg" --query id -o tsv)
-az tag update --resource-id "$sa_id" --operation Merge --tags "${tags[@]}" --output none
+MSYS_NO_PATHCONV=1 az tag update \
+  --resource-id "$sa_id" \
+  --operation Merge \
+  --tags "${tags[@]}" \
+  --output none
 
 az storage account blob-service-properties update \
   --account-name "$sa" \
@@ -163,7 +285,7 @@ for principal in ${STATE_CONTRIBUTORS:-}; do
 done
 
 for principal in "${principals[@]}"; do
-  existing=$(az role assignment list \
+  existing=$(MSYS_NO_PATHCONV=1 az role assignment list \
     --assignee "$principal" \
     --scope "$sa_id" \
     --include-inherited \
@@ -171,7 +293,7 @@ for principal in "${principals[@]}"; do
     -o tsv)
 
   if [[ "$existing" == "0" ]]; then
-    az role assignment create \
+    MSYS_NO_PATHCONV=1 az role assignment create \
       --assignee-object-id "$principal" \
       --role "Storage Blob Data Contributor" \
       --scope "$sa_id" \
@@ -211,4 +333,5 @@ terraform {
 }
 EOF
 
-echo "Wrote infra/backend.tf ($rg/$sa). Now run: terraform -chdir=infra init"
+echo "Wrote $backend_tf ($rg/$sa, stack $state_stack, key $state_key)."
+echo "Now run: terraform -chdir=$terraform_dir init"

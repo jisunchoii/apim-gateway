@@ -46,6 +46,12 @@ Keycloak을 거치지 않고 APIM이 API 범위 subscription key를 검증합니
 
 ## 배포
 
+Azure Databricks Claude는 기존 classic stack에 모델 HA 변경을 함께 넣지 않고 Korea Central
+Standard v2 독립 stack으로 먼저 구축합니다. 자세한 절차는
+[Claude Standard v2 APIM 구축 가이드](claude-standard-v2-deployment.md)를 사용합니다.
+기존 `infra/` state에서 APIM SKU/location을 직접 바꾸지 않습니다. Central US 모델 fallback은
+Claude 검증 후 별도 단계로 적용합니다.
+
 ### 준비
 
 | 항목 | 준비 사항 |
@@ -188,9 +194,10 @@ APIM management API는 저장된 policy XML의 들여쓰기, attribute quote와 
 canonical format으로 다시 serialize합니다. 따라서 refresh 후 plan에 두 API policy의 formatting
 update가 보일 수 있지만 route, audience와 body가 같으면 의미상 변경은 아닙니다.
 
-Gateway 전용 Foundry account가 OpenAI와 Fireworks 모델을 함께 호스팅하므로 APIM Managed
-Identity는 resource scope의 `Cognitive Services User` 역할과 `https://ai.azure.com` audience를
-사용합니다.
+Gateway 전용 Azure AI Services account를 직접 호출하는 backend는 APIM Managed Identity에
+resource scope의 `Cognitive Services OpenAI User` 역할을 부여하고
+`https://cognitiveservices.azure.com` audience를 사용합니다. 기존 Foundry Project endpoint는
+별도로 `Foundry User`와 `https://ai.azure.com` audience를 사용합니다.
 
 ### 기존 Foundry 프로젝트 모델 연결
 
@@ -335,20 +342,27 @@ ApiManagementGatewayLlmLog
 | extend blind_pct = iff(total == 0, 0.0, round(100.0 * blind / total, 1))
 ```
 
-`trace`는 App Insights 샘플링의 영향을 받지 않아 전량 기록됩니다. 커스텀 메트릭
-(`llm-emit-token-metric`)은 사용하지 않습니다. 포털 전용 설정이 필요하고, GA 예정이 없는
-preview이며, 50,000개 time series 상한이 있고, 문서상 감사 용도로 사용할 수 없다고 명시되어
-있기 때문입니다.
+기존 classic OpenAI Gateway는 `llm-emit-token-metric`을 사용하지 않습니다. Claude Standard v2
+stack은 Anthropic token 관측을 위해 Application Insights custom metric을 별도로 사용하되,
+dimension은 API ID, operation ID, requested model로 제한합니다. 사용자 ID는 metric dimension에
+넣지 않고 `GatewayLlmLogs`와 가명 trace를 `CorrelationId`로 결합합니다. 이 metric은 preview
+제한과 누락 가능성이 있으므로 운영 추세용이며 감사 또는 과금 원장이 아닙니다.
 
 ## 네트워크
 
-VNet·private endpoint·jumpbox는 사용하지 않습니다. classic APIM은 인터넷 백엔드로 나갈 때
+기존 `infra/` classic stack은 VNet·private endpoint·jumpbox를 사용하지 않습니다. classic APIM은 인터넷 백엔드로 나갈 때
 **고정 공인 IP**를 사용합니다. Foundry 네트워크 방화벽은 모든 요청을 기본적으로 차단하고
 APIM의 공인 IP에서 들어오는 요청만 허용합니다. 또한 API key 인증을 비활성화하므로, 허용된
 IP에서 접근하더라도 APIM Managed Identity와 Azure RBAC 권한이 있어야 모델을 호출할 수 있습니다.
 
 주의: 이 IP는 인스턴스를 재생성하거나 VNet, 서브넷 또는 가용영역을 변경하면 달라집니다.
 이 경우 `apply`를 다시 실행해 `ip_rules`를 갱신합니다.
+
+신규 `infra/environments/claude-standard-v2/` stack은 public APIM endpoint를 유지하면서
+outbound만 Korea Central VNet에 통합합니다. APIM 전용 delegated subnet은 StandardV2 NAT
+Gateway와 StandardV2 static public IP를 사용합니다. 이 stack은 Databricks와 Keycloak만
+호출하므로 기존 East US 2 Azure AI Services firewall을 변경하지 않습니다. Databricks 또는
+Keycloak이 source IP allowlist를 사용하면 신규 `nat_gateway_public_ip` output만 허용합니다.
 
 ## TPM
 

@@ -103,18 +103,21 @@ repository 또는 environment secret에 `LLMGW_SUBSCRIPTION_KEY`로 저장하고
 
 ## 지원 API
 
-Gateway base URL에는 이미 `/openai/v1`이 포함되어 있습니다.
+OpenAI 호환 `gateway_base_url`에는 이미 `/openai/v1`이 포함되어 있습니다.
 
 | Method | Suffix | 용도 |
 |---|---|---|
 | `POST` | `/responses` | OpenAI Responses 형식입니다. Codex CLI와 GPT 계열에 권장합니다. |
 | `POST` | `/chat/completions` | OpenAI Chat Completions 형식입니다. `messages` 기반 클라이언트와 OpenCode Foundry 모델에 사용합니다. |
 
+Claude Code는 별도 Korea Central Standard v2 stack의 `claude_gateway_base_url`을 사용합니다.
+기존 Classic APIM은 AOAI/Fireworks의 OpenAI 호환 API만 제공합니다.
+
 다음 API는 현재 제공하지 않습니다.
 
 - `GET /models`
 - `POST /responses/compact`
-- Anthropic `POST /v1/messages`
+- Anthropic `POST /v1/messages/count_tokens` (Claude Code가 inference endpoint 기반 계산으로 fallback)
 - Embeddings, Images, Audio API
 
 미지원 경로는 일반적으로 `404`를 반환합니다.
@@ -132,6 +135,104 @@ Chat 전용 `stream_options`를 제거합니다. 또한 OpenCode가 role 기반 
 누락하거나 빈 문자열로 보내면 Foundry Responses 형식에 맞게 `type: "message"`를 채웁니다.
 
 ## Coding agent 설정
+
+### Claude Code
+
+Claude Code는 `infra/environments/claude-standard-v2/`로 배포한 별도 APIM의 Anthropic
+Messages API를 사용합니다. `apiKeyHelper`는 기존 Keycloak Device Flow credential을 사용해
+access token을 발급하고 refresh token으로 자동 갱신합니다. Standard v2 APIM은 Keycloak JWT를
+검증한 뒤 Authorization header를 관리 ID token으로 교체하여 Azure Databricks Unity AI Gateway에
+전달합니다.
+
+Linux 사용자 설정 `~/.claude/settings.json` 예시입니다. `apiKeyHelper` 경로는 저장소의 실제
+절대 경로로 변경합니다.
+
+```json
+{
+  "apiKeyHelper": "node /home/<linux-user>/src/apim-gateway/scripts/keycloak/keycloak-token.js --open-browser",
+  "env": {
+    "LLMGW_OIDC_DISCOVERY_URL": "https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration",
+    "LLMGW_OIDC_CLIENT_ID": "llm-gateway-cli",
+    "LLMGW_OIDC_SCOPE": "openid llm-gateway",
+    "ANTHROPIC_BASE_URL": "https://<claude-standard-v2-apim>.azure-api.net/anthropic",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "system.ai.claude-opus-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "system.ai.claude-sonnet-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "system.ai.claude-haiku-4-5",
+    "ENABLE_PROMPT_CACHING_1H": "1",
+    "ENABLE_TOOL_SEARCH": "1"
+  },
+  "permissions": {
+    "deny": [
+      "WebSearch"
+    ],
+    "allow": [
+      "WebFetch"
+    ]
+  }
+}
+```
+
+Azure Databricks Foundation Model API는 Anthropic native `WebSearch`를 지원하지 않으므로 위와
+같이 비활성화하여 반복되는 `400` 응답을 방지하는 구성을 권장합니다. `WebFetch`는 알고 있는 URL의
+내용을 가져올 수 있지만 검색 엔진을 완전히 대체하지는 않습니다. 일반적인 웹 검색이 필요하면
+[Azure Databricks Web Search 공식 가이드](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/web-search)에
+따라 You.com 같은 Web Search MCP server를 연결합니다. Claude Code의 도구 허용·차단 방식은
+[Claude Code permissions 공식 문서](https://code.claude.com/docs/en/permissions)를 참고합니다.
+
+설정 파일을 현재 사용자만 읽을 수 있도록 제한한 뒤 Claude Code를 실행합니다.
+
+```bash
+mkdir -p ~/.claude
+chmod 700 ~/.claude
+chmod 600 ~/.claude/settings.json
+claude
+```
+
+저장소와 local Terraform state가 있는 Linux 환경에서는 다음 명령으로 Gateway를 직접 확인할 수
+있습니다. Terraform state가 없는 사용자 PC에서는 `CLAUDE_GATEWAY_BASE_URL`을 운영자가 안내한
+URL로 설정합니다.
+
+```bash
+cd /home/<linux-user>/src/apim-gateway
+
+export CLAUDE_GATEWAY_BASE_URL="$(
+  terraform -chdir=infra/environments/claude-standard-v2 \
+    output -raw claude_gateway_base_url
+)"
+export LLMGW_OIDC_DISCOVERY_URL="https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
+export LLMGW_OIDC_CLIENT_ID="llm-gateway-cli"
+export LLMGW_OIDC_SCOPE="openid llm-gateway"
+
+TOKEN="$(node ./scripts/keycloak/keycloak-token.js --open-browser)"
+
+curl --silent --show-error \
+  --request POST \
+  --url "$CLAUDE_GATEWAY_BASE_URL/v1/messages" \
+  --header "Authorization: Bearer $TOKEN" \
+  --header "anthropic-version: 2023-06-01" \
+  --header "Content-Type: application/json" \
+  --data '{"model":"system.ai.claude-sonnet-5","max_tokens":64,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}'
+```
+
+SSE streaming은 `curl --no-buffer`와 `"stream":true`로 확인합니다.
+
+```bash
+curl --no-buffer --silent --show-error \
+  --request POST \
+  --url "$CLAUDE_GATEWAY_BASE_URL/v1/messages" \
+  --header "Authorization: Bearer $TOKEN" \
+  --header "anthropic-version: 2023-06-01" \
+  --header "Content-Type: application/json" \
+  --data '{"model":"system.ai.claude-sonnet-5","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}'
+```
+
+`apiKeyHelper` 결과는 Claude Code가 `Authorization`과 `x-api-key`에 함께 넣지만 APIM은
+Authorization의 Keycloak JWT만 검증하고 `x-api-key`는 backend 전달 전에 제거합니다.
+`ANTHROPIC_MODEL`은 설정하지 않아야 `/model opus`, `/model sonnet`, `/model haiku`가 위 family
+기본값으로 각각 전환됩니다. Fable은 `claude --model system.ai.claude-fable-5`처럼 정확한
+모델명을 지정해 사용합니다. Fable의 데이터 처리 조건은
+[Databricks Claude 고객 설정 가이드](docs/databricks-claude-apim-guide.md#3-claude-model-권한)를
+확인합니다.
 
 ### OpenCode
 
@@ -376,6 +477,8 @@ Terraform 배포, 모델 관리, Workbook과 로그 쿼리는
 
 ## 관련 문서
 
+- [Korea Central Claude Standard v2 APIM 구축 가이드](docs/claude-standard-v2-deployment.md)
+- [Azure Databricks Claude 고객 설정 가이드](docs/databricks-claude-apim-guide.md)
 - [Keycloak Device Authorization Grant](https://www.keycloak.org/docs/latest/server_admin/#_oid4vc_device_authorization_grant)
 - [Azure API Management validate-jwt 정책](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)
 - [Azure API Management subscriptions](https://learn.microsoft.com/azure/api-management/api-management-subscriptions)

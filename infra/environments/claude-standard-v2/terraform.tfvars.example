@@ -1,0 +1,86 @@
+prefix       = "llmgw"
+env          = "dev"
+owner        = "platform-team@example.com"
+cost_center  = "cc-1234"
+trace_source = "claude-standard-v2"
+
+apim_location        = "koreacentral"
+apim_sku             = "StandardV2"
+apim_capacity        = 1
+apim_publisher_name  = "Platform Team"
+apim_publisher_email = "platform-team@example.com"
+
+# APIM outbound VNet integration 전용 주소 공간이다. delegated subnet은 VNet CIDR 안에 있어야
+# 하며 Standard v2 요구사항에 맞게 /27 이상 크기를 사용한다.
+vnet_address_space           = ["10.82.0.0/24"]
+apim_subnet_address_prefixes = ["10.82.0.0/27"]
+nat_idle_timeout_minutes     = 10
+
+# 기존 Keycloak realm/client/audience/scope/role을 그대로 사용한다.
+oidc_provider = {
+  openid_config_url = "https://keycloak.example.com/realms/llm/.well-known/openid-configuration"
+  audience          = "llm-gateway-api"
+  issuer            = "https://keycloak.example.com/realms/llm"
+  client_id         = "llm-gateway-cli"
+  client_scope      = "openid llm-gateway"
+  required_scope    = "llm-gateway"
+  scope_claim       = "scope"
+  role_claim        = "llm_gateway_roles"
+  required_role     = "invoke"
+  user_label_claim  = "llm_gateway_user"
+}
+
+# 기존 Databricks workspace와 system.ai Claude 모델을 재사용한다.
+# workspace는 APIM과 다른 Azure subscription에 있어도 URL로 연결할 수 있지만, 현재 구성은
+# 같은 Microsoft Entra tenant를 전제로 한다. Terraform은 workspace ARM resource를 조회하거나
+# 관리하지 않으므로 public access, IP/context ingress, Private Link/DNS와 APIM identity 등록
+# 가능 여부를 docs/databricks-claude-apim-guide.md에 따라 별도로 확인한다.
+databricks_claude_gateway = {
+  workspace_url = "https://adb-0000000000000000.0.azuredatabricks.net"
+  models = {
+    opus   = "system.ai.claude-opus-5"
+    sonnet = "system.ai.claude-sonnet-5"
+    haiku  = "system.ai.claude-haiku-4-5"
+    fable  = "system.ai.claude-fable-5"
+  }
+}
+
+# 0이면 rate limit을 만들지 않는다. token logging과는 독립적인 설정이다.
+user_tokens_per_minute = 0
+
+log_retention_days    = 90
+token_metric_namespace = "ClaudeGateway"
+workbook_display_name  = "Claude Standard v2 Gateway"
+
+# Azure Databricks가 게시한 Global pay-per-token DBU/1M token 소비율이다.
+# Workbook이 아래 소비율에 0.105 USD/DBU를 곱해 추정 비용을 계산한다.
+# APIM이 cache_creation_input_tokens를 내보내지 않으므로 공식 cache-write 소비율은 포함하지 않는다.
+# Source: https://www.databricks.com/product/pricing/proprietary-foundation-model-serving
+model_pricing_dbu_per_million = {
+  "system.ai.claude-opus-5" = {
+    input        = 71.429
+    output       = 357.143
+    cached_input = 7.143
+  }
+  "system.ai.claude-sonnet-5" = {
+    input        = 28.571
+    output       = 142.857
+    cached_input = 2.857
+  }
+  "system.ai.claude-haiku-4-5" = {
+    input        = 14.286
+    output       = 71.429
+    cached_input = 1.429
+  }
+  "system.ai.claude-fable-5" = {
+    input        = 142.858
+    output       = 714.286
+    cached_input = 14.286
+  }
+}
+databricks_dbu_price_usd = 0.105
+
+catalog_outputs = {
+  registry_template = "docs/claude-standard-v2-registry.template.html"
+  registry_html     = "docs/claude-standard-v2-registry.html"
+}

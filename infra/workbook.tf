@@ -3,8 +3,10 @@ data "azurerm_client_config" "current" {}
 resource "random_uuid" "governance_workbook" {}
 
 locals {
+  governance_model_names = local.routed_models
+
   governance_price_rows = join(",\n", [
-    for model_name in local.routed_models :
+    for model_name in local.governance_model_names :
     "  ${jsonencode(model_name)}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].input, 0))}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].output, 0))}"
   ])
 
@@ -14,7 +16,7 @@ locals {
   ])
 
   governance_pricing_summary = join(" · ", [
-    for model_name in local.routed_models :
+    for model_name in local.governance_model_names :
     "${model_name}: input ${try(var.model_pricing_usd_per_million[model_name].input, 0)} / output ${try(var.model_pricing_usd_per_million[model_name].output, 0)} USD per 1M"
   ])
 

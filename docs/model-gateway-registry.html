@@ -2727,10 +2727,10 @@
           <div class="page-heading">
             <div class="page-heading-copy">
               <h1>Model Gateway Registry</h1>
-              <p>OpenCode, Codex CLI, Claude Code에서 GPT와 Foundry 모델을 호출하는 경로, 인증, 변환 프록시, 요청 파라미터와 Backend 운영 구성을 탐색합니다.</p>
+              <p>OpenCode와 Codex CLI에서 AOAI/Fireworks 모델을 호출하는 경로, 인증, 요청 파라미터와 Backend 운영 구성을 탐색합니다.</p>
               <div class="hero-meta">
                 <span class="badge accent" id="gateway-name">apim-claudegw-dev-eus2-015pnu</span>
-                <span class="badge">East US 2</span>
+                <span class="badge" id="gateway-location">East US 2</span>
                 <span class="badge">OIDC + Service Account</span>
               </div>
             </div>
@@ -2754,23 +2754,23 @@
       window.__TERRAFORM_CATALOG__ =
       {
         "backend_identity": {
-          "audience": "https://ai.azure.com",
-          "role": "Cognitive Services User"
+          "audience": "https://cognitiveservices.azure.com",
+          "role": "Cognitive Services OpenAI User"
         },
         "gateway": {
-          "foundry_account_name": "ais-claudegw-dev-eus2-015pnu",
+          "foundry_account_name": "ais-claudegw-dev-eus2-307rh8",
           "location": "eastus2",
-          "name": "apim-claudegw-dev-eus2-015pnu",
-          "oidc_base_url": "https://apim-claudegw-dev-eus2-015pnu.azure-api.net/openai/v1",
-          "service_base_url": "https://apim-claudegw-dev-eus2-015pnu.azure-api.net/service/openai/v1"
+          "name": "apim-claudegw-dev-eus2-307rh8",
+          "oidc_base_url": "https://apim-claudegw-dev-eus2-307rh8.azure-api.net/openai/v1",
+          "service_base_url": "https://apim-claudegw-dev-eus2-307rh8.azure-api.net/service/openai/v1"
         },
         "models": [
           {
             "api": "chat",
             "api_path": "/chat/completions",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-dce548823a480bcd",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 50000,
             "capacity_units": 50,
             "model_format": "Fireworks",
@@ -2778,16 +2778,16 @@
             "model_version": "1",
             "name": "FW-DeepSeek-V4-Flash-0731",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.Nil",
+            "rai_policy_name": null,
             "sku_name": "DataZoneStandard",
             "source": "gateway-managed"
           },
           {
             "api": "chat",
             "api_path": "/chat/completions",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-031e74cc7b09cf49",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 150000,
             "capacity_units": 150,
             "model_format": "Fireworks",
@@ -2795,16 +2795,16 @@
             "model_version": "1",
             "name": "FW-GLM-5.2",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.Nil",
+            "rai_policy_name": null,
             "sku_name": "DataZoneStandard",
             "source": "gateway-managed"
           },
           {
             "api": "chat",
             "api_path": "/chat/completions",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-6878138e52a83205",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 300000,
             "capacity_units": 300,
             "model_format": "Fireworks",
@@ -2812,16 +2812,16 @@
             "model_version": "1",
             "name": "FW-Kimi-K3",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.Nil",
+            "rai_policy_name": null,
             "sku_name": "DataZoneStandard",
             "source": "gateway-managed"
           },
           {
             "api": "responses",
             "api_path": "/responses",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-7bf2b83a5ca00341",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 1000000,
             "capacity_units": 1000,
             "model_format": "OpenAI",
@@ -2829,16 +2829,16 @@
             "model_version": "2026-07-09",
             "name": "gpt-5.6-luna",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.DefaultV2",
+            "rai_policy_name": null,
             "sku_name": "GlobalStandard",
             "source": "gateway-managed"
           },
           {
             "api": "responses",
             "api_path": "/responses",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-6b6cb90c15788bb2",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 1000000,
             "capacity_units": 1000,
             "model_format": "OpenAI",
@@ -2846,16 +2846,16 @@
             "model_version": "2026-07-09",
             "name": "gpt-5.6-sol",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.DefaultV2",
+            "rai_policy_name": null,
             "sku_name": "GlobalStandard",
             "source": "gateway-managed"
           },
           {
             "api": "responses",
             "api_path": "/responses",
-            "auth_resource": "https://ai.azure.com",
+            "auth_resource": "https://cognitiveservices.azure.com",
             "backend_id": "model-f914828b09a2f829",
-            "backend_url": "https://ais-claudegw-dev-eus2-015pnu.openai.azure.com/openai/v1",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
             "capacity_tpm": 1000000,
             "capacity_units": 1000,
             "model_format": "OpenAI",
@@ -2863,13 +2863,30 @@
             "model_version": "2026-07-09",
             "name": "gpt-5.6-terra",
             "project_resource": null,
-            "rai_policy_name": "Microsoft.DefaultV2",
+            "rai_policy_name": null,
+            "sku_name": "GlobalStandard",
+            "source": "gateway-managed"
+          },
+          {
+            "api": "chat",
+            "api_path": "/chat/completions",
+            "auth_resource": "https://cognitiveservices.azure.com",
+            "backend_id": "model-1e192b7a37519a4f",
+            "backend_url": "https://ais-claudegw-dev-eus2-307rh8.openai.azure.com/openai/v1",
+            "capacity_tpm": 500000,
+            "capacity_units": 500,
+            "model_format": "xAI",
+            "model_name": "grok-4.6",
+            "model_version": "1",
+            "name": "grok-4.6",
+            "project_resource": null,
+            "rai_policy_name": null,
             "sku_name": "GlobalStandard",
             "source": "gateway-managed"
           }
         ],
         "schema_version": 1,
-        "generated_at": "2026-08-27T02:26:42.952Z"
+        "generated_at": "2026-08-31T11:41:51.464Z"
       };
     </script>
     <!-- END_TERRAFORM_CATALOG -->
@@ -2923,26 +2940,41 @@
         "API 형식",
         "Entra 토큰 대상",
         "APIM RBAC",
-        "429 Circuit Breaker",
+        "Circuit Breaker",
         "역할 / 비고"
       ];
+      const items = catalog.models.map((model) => ({
+          "모델": model.name,
+          "APIM Backend ID": model.backend_id,
+          "Endpoint 유형": model.source === "priority-pool"
+            ? "Priority Backend Pool"
+            : model.source === "gateway-managed"
+              ? "Gateway Foundry Account"
+              : "Foundry Project",
+          "Backend Base URL": Array.isArray(model.backends) && model.backends.length
+            ? model.backends
+                .map((backend) => `P${backend.priority} ${backend.region}: ${backend.url}`)
+                .join("\n")
+            : model.backend_url,
+          "API 형식": model.api === "responses" ? "Responses" : "Chat Completions",
+          "Entra 토큰 대상": model.auth_resource,
+          "APIM RBAC": catalog.backend_identity?.role || "",
+          "Circuit Breaker": model.circuit_breaker
+            ? `${model.circuit_breaker.interval} 내 ${model.circuit_breaker.status_codes.join("/")} ${model.circuit_breaker.count}회 → ${model.circuit_breaker.trip_duration} Open; Retry-After 수용`
+            : "1분 내 429 50회 → 기본 10초 Open; Retry-After 수용",
+          "역할 / 비고": model.source === "priority-pool"
+            ? model.backends
+                .map((backend) => `${backend.role}=${backend.region} priority ${backend.priority}`)
+                .join(" · ")
+            : model.source === "gateway-managed"
+            ? `${model.model_format} ${model.model_version} · ${model.sku_name} capacity ${model.capacity_units}`
+            : `External project deployment · ${model.capacity_tpm} TPM`
+        }));
       return {
         title: "APIM Backend 및 Endpoint 구조",
         intro: `${catalog.gateway.name} · Terraform-routed model과 실제 Backend 구성`,
         headers,
-        items: catalog.models.map((model) => ({
-          "모델": model.name,
-          "APIM Backend ID": model.backend_id,
-          "Endpoint 유형": model.source === "gateway-managed" ? "Gateway Foundry Account" : "Foundry Project",
-          "Backend Base URL": model.backend_url,
-          "API 형식": model.api === "responses" ? "Responses" : "Chat Completions",
-          "Entra 토큰 대상": model.auth_resource,
-          "APIM RBAC": catalog.backend_identity?.role || "",
-          "429 Circuit Breaker": "1분 내 429 50회 → 기본 10초 Open; Retry-After 수용",
-          "역할 / 비고": model.source === "gateway-managed"
-            ? `${model.model_format} ${model.model_version} · ${model.sku_name} capacity ${model.capacity_units}`
-            : `External project deployment · ${model.capacity_tpm} TPM`
-        }))
+        items
       };
     }
 
@@ -2953,6 +2985,7 @@
       const clientAuthPairs = [];
       const seenPairs = new Set();
       for (const item of staticData.items) {
+        if (item["Client"] === "Claude Code") continue;
         const key = `${item["Client"]}\u0000${item["인증"]}`;
         if (!seenPairs.has(key)) {
           seenPairs.add(key);
@@ -2992,9 +3025,13 @@
     function catalogEndpointComparison(staticData, catalog) {
       if (!Array.isArray(catalog.models) || !catalog.models.length) return staticData;
       const projectModels = catalog.models.filter((model) => model.source === "external-project");
-      const gatewayModels = catalog.models.filter((model) => model.source === "gateway-managed");
-      const projectUrls = [...new Set(projectModels.map((model) => model.backend_url))];
-      const gatewayUrls = [...new Set(gatewayModels.map((model) => model.backend_url))];
+      const gatewayModels = catalog.models.filter((model) => model.source !== "external-project");
+      const projectUrls = [...new Set(projectModels.map((model) => model.backend_url).filter(Boolean))];
+      const gatewayUrls = [...new Set(gatewayModels.flatMap((model) =>
+        Array.isArray(model.backends) && model.backends.length
+          ? model.backends.map((backend) => backend.url)
+          : [model.backend_url]
+      ).filter(Boolean))];
       const audience = catalog.backend_identity?.audience || "";
       const role = catalog.backend_identity?.role || "";
 
@@ -3033,6 +3070,7 @@
             : value
         ])
       ));
+      summary.items = summary.items.filter((item) => item["Client"] !== "Claude Code");
     }
     const calls = catalogCalls(tableData("호출_매트릭스"), terraformCatalog);
     const parameters = tableData("요청_파라미터");
@@ -3056,15 +3094,31 @@
     );
     const backendSheet = workbook["APIM_백엔드"] || [];
     const staticBackendNotes = backendSheet.slice(25, 29).map((row) => row[0]).filter(Boolean);
+    const priorityPoolModels = terraformCatalog.models?.filter((model) => model.source === "priority-pool") || [];
+    const hasPriorityPools = priorityPoolModels.length > 0;
+    const representativeBreaker = priorityPoolModels.find((model) => model.circuit_breaker)?.circuit_breaker;
+    const breakerTriggerSummary = representativeBreaker
+      ? `${representativeBreaker.interval} 내 ${representativeBreaker.status_codes.join("/")} ${representativeBreaker.count}회`
+      : "1분 내 429 50회";
+    const breakerTripSummary = representativeBreaker?.trip_duration || "10초";
     const backendNotes = Array.isArray(terraformCatalog.models) && terraformCatalog.models.length
-      ? [
-          `• APIM Backend 객체는 ${terraformCatalog.models.length}개이며 실제 Backend Base URL은 ${
-            new Set(terraformCatalog.models.map((model) => model.backend_url)).size
-          }개입니다.`,
-          "• 모델별 Backend 분리는 429 Circuit Breaker 상태를 모델별로 격리하기 위한 구성입니다.",
-          "• 현재는 Backend Pool이 없으므로 Circuit Breaker가 열려도 다른 지역이나 endpoint로 자동 failover되지 않습니다.",
-          "• Endpoint를 추가하는 것만으로 TPM이 증가하지 않으며 quota와 처리량은 실제 모델 deployment에 귀속됩니다."
-        ]
+      ? hasPriorityPools
+        ? [
+            `• 모델별 logical pool ${priorityPoolModels.length}개와 physical backend ${
+              priorityPoolModels.reduce((count, model) => count + model.backends.length, 0)
+            }개를 사용합니다.`,
+            "• East US 2가 priority 1이며 해당 모델의 circuit breaker가 열린 뒤 후속 요청부터 Central US priority 2를 사용합니다.",
+            "• Circuit breaker는 모델과 지역별 physical backend로 분리되어 한 모델의 장애가 다른 모델의 route를 열지 않습니다.",
+            "• 실패한 POST를 무조건 재전송하지 않으므로 breaker를 여는 요청 자체는 오류를 받을 수 있습니다."
+          ]
+        : [
+            `• APIM Backend 객체는 ${terraformCatalog.models.length}개이며 Foundry Backend Base URL은 ${
+              new Set(terraformCatalog.models.map((model) => model.backend_url)).size
+            }개입니다.`,
+            "• 모델별 Backend 분리는 429 Circuit Breaker 상태를 모델별로 격리하기 위한 구성입니다.",
+            "• 현재는 Backend Pool이 없으므로 Circuit Breaker가 열려도 다른 지역이나 endpoint로 자동 failover되지 않습니다.",
+            "• Endpoint를 추가하는 것만으로 TPM이 증가하지 않으며 quota와 처리량은 실제 모델 deployment에 귀속됩니다."
+          ]
       : staticBackendNotes;
     const backendRefs = [
       {
@@ -3086,6 +3140,10 @@
     if (gatewayName) {
       document.getElementById("gateway-name").textContent = gatewayName;
       document.getElementById("gateway-selector").textContent = `${gatewayName} ▾`;
+    }
+    if (terraformCatalog.gateway?.location) {
+      document.getElementById("gateway-location").textContent =
+        terraformCatalog.gateway.location;
     }
     if (terraformCatalog.generated_at) {
       const generatedAt = new Date(terraformCatalog.generated_at).toLocaleString("ko-KR");
@@ -3618,11 +3676,11 @@
             </header>
             <div class="route-overview-body">
               <div class="route-path">
-                <div class="route-node"><strong>Client</strong><span>Responses 또는 Chat 요청</span></div>
+                <div class="route-node"><strong>Client</strong><span>Responses, Chat 또는 Anthropic 요청</span></div>
                 <div class="route-arrow">→</div>
                 <div class="route-node"><strong>APIM</strong><span>인증 · 정책 · 모델 라우팅</span></div>
                 <div class="route-arrow">→</div>
-                <div class="route-node"><strong>Foundry Model</strong><span>동일 API 형식으로 처리</span></div>
+                <div class="route-node"><strong>Backend</strong><span>Foundry에서 동일 형식으로 처리</span></div>
               </div>
             </div>
           </article>
@@ -3806,7 +3864,7 @@
         return [{ label: "Client → APIM /chat/completions", body: chatRequestBody(chatModel) }];
       }
       if (wire === "Anthropic Messages") {
-        return [{ label: "Client → /v1/messages", body: messagesRequestBody(responseModel) }];
+        return [{ label: "Client → translator /v1/messages", body: messagesRequestBody(responseModel) }];
       }
       if (wire === "Responses → Chat") {
         return [
@@ -3839,7 +3897,7 @@
       const status = title.startsWith("OpenAI ")
         ? "APIM 직접 지원"
         : title === "Anthropic Messages"
-          ? "현재 미지원"
+          ? "Translator Proxy 필요"
           : "Translator Proxy 필요";
       const examples = requestJsonExamples(row);
       return `
@@ -3888,7 +3946,7 @@
       const stageHeader = policy.headers[1];
       return `
         ${sectionHeading(policy.title, policy.intro, rows.length)}
-        <div class="notice">APIM은 인증과 모델 라우팅, 제한된 body 정규화만 수행합니다. Responses↔Chat 또는 Anthropic↔OpenAI 프로토콜 변환은 수행하지 않습니다.</div>
+        <div class="notice">Classic APIM은 AOAI/Fireworks 요청의 인증, 모델 라우팅과 제한된 body 정규화만 수행합니다. Databricks Claude는 별도 Standard v2 APIM이 담당합니다.</div>
         <div class="timeline">
           ${rows.length ? rows.map((row, index) => `
             <article class="timeline-item">
@@ -3925,7 +3983,7 @@
                   <div class="architecture-node success">
                     <span class="architecture-kicker">APIM Backend 객체</span>
                     <strong>${escapeHtml(row["APIM Backend ID"])}</strong>
-                    <small>${escapeHtml(row["모델"])} 전용 breaker · 1분 내 429 50회</small>
+                    <small>${escapeHtml(row["모델"])} · ${escapeHtml(row["Circuit Breaker"] || row["429 Circuit Breaker"])}</small>
                   </div>
                   <div class="architecture-arrow">→</div>
                   <div class="architecture-node">
@@ -3940,7 +3998,7 @@
             <span>Backend 객체 수: ${rows.length}</span>
             <span>고유 Base URL 수: ${new Set(rows.map((row) => row["Backend Base URL"])).size}</span>
             <span>격리 단위: model/backend-id</span>
-            <span>자동 failover: 없음</span>
+            <span>자동 failover: ${hasPriorityPools ? "Priority pool" : "없음"}</span>
           </div>
         </article>`;
     }
@@ -3983,19 +4041,21 @@
           <article class="card">
             <div class="card-header">
               <div class="card-title">
-                <h3>현재 구성 · 모델별 Backend</h3>
-                <p>장애 범위가 해당 모델로 제한됨</p>
+                <h3>현재 구성 · 모델별 ${hasPriorityPools ? "Priority Pool" : "Backend"}</h3>
+                <p>${hasPriorityPools ? "모델·지역별 breaker와 active/passive 전환" : "장애 범위가 해당 모델로 제한됨"}</p>
               </div>
               ${badge("격리됨", "success")}
             </div>
             <div class="flow">
-              <div class="flow-step"><strong>Model A</strong><span>1분 내 429 50회</span></div>
+              <div class="flow-step"><strong>Model A</strong><span>${escapeHtml(breakerTriggerSummary)}</span></div>
               <div class="flow-arrow">→</div>
-              <div class="flow-step"><strong>Backend A Open</strong><span>A 요청만 503</span></div>
+              <div class="flow-step"><strong>Primary Open</strong><span>${hasPriorityPools ? "후속 요청은 priority 2" : "A 요청만 503"}</span></div>
               <div class="flow-arrow">→</div>
-              <div class="flow-step"><strong>Model B/C</strong><span>각 Backend로 계속 정상 호출</span></div>
+              <div class="flow-step"><strong>${hasPriorityPools ? "Secondary" : "Model B/C"}</strong><span>${hasPriorityPools ? "Central US backend 사용" : "각 Backend로 계속 정상 호출"}</span></div>
             </div>
-            <p>Model A가 quota 또는 과부하로 반복 429를 반환해도 A의 Backend 객체만 열립니다. 기본 trip duration은 10초이며, backend의 Retry-After가 있으면 해당 복구 시간을 수용합니다.</p>
+            <p>${hasPriorityPools
+              ? `Model A의 East US 2 physical backend가 ${escapeHtml(breakerTriggerSummary)} 조건으로 열리면 후속 요청부터 Central US priority 2 backend를 사용합니다. 기본 open 기간은 ${escapeHtml(breakerTripSummary)}이며 Retry-After를 수용합니다.`
+              : `Model A가 quota 또는 과부하로 반복 429를 반환해도 A의 Backend 객체만 열립니다. 기본 open 기간은 ${escapeHtml(breakerTripSummary)}이며 Retry-After를 수용합니다.`}</p>
           </article>
           <article class="card">
             <div class="card-header">
@@ -4006,7 +4066,7 @@
               ${badge("공유 blast radius", "danger")}
             </div>
             <div class="flow">
-              <div class="flow-step"><strong>Model A</strong><span>반복 429로 shared breaker trip</span></div>
+              <div class="flow-step"><strong>Model A</strong><span>${escapeHtml(breakerTriggerSummary)}로 shared breaker trip</span></div>
               <div class="flow-arrow">→</div>
               <div class="flow-step"><strong>Backend Shared Open</strong><span>공통 상태가 Open</span></div>
               <div class="flow-arrow">→</div>
@@ -4015,7 +4075,9 @@
             <p>Base URL이 같다는 이유로 모든 모델을 Backend 하나에 연결하면 breaker 상태도 하나입니다. 한 모델의 quota 문제가 정상인 다른 모델의 요청까지 막을 수 있습니다.</p>
           </article>
         </div>
-        <div class="notice">현재 구성은 <strong>장애 격리</strong>를 제공하지만 <strong>HA failover</strong>를 제공하지 않습니다. Circuit이 열리면 APIM은 해당 Backend로 보내지 않고 503을 반환하며, APIM Gateway 인스턴스 간 breaker 판정은 분산 구조상 근사치입니다.</div>
+        <div class="notice">${hasPriorityPools
+          ? `현재 구성은 모델별 <strong>장애 격리</strong>와 priority 기반 <strong>backend failover</strong>를 제공합니다. Primary breaker를 연 요청 자체는 재전송하지 않아 오류를 받을 수 있고, 이후 요청부터 secondary로 이동합니다. APIM Gateway 인스턴스 간 breaker 판정은 분산 구조상 근사치입니다.`
+          : `현재 구성은 <strong>장애 격리</strong>를 제공하지만 <strong>HA failover</strong>를 제공하지 않습니다. Circuit이 열리면 APIM은 해당 Backend로 보내지 않고 503을 반환하며, APIM Gateway 인스턴스 간 breaker 판정은 분산 구조상 근사치입니다.`}</div>
 
         ${sectionHeading("모델별 Backend 인벤토리", "Terraform api_catalog_manifest에서 생성된 model, backend-id, endpoint, 인증 및 circuit breaker 설정입니다.", rows.length)}
         <div class="grid three">${rows.length ? rows.map(modelCard).join("") : emptyState()}</div>

@@ -4,6 +4,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 terraform_dir="$script_dir/../infra"
 registry_html="$script_dir/../docs/model-gateway-registry.html"
+registry_template=""
 plan_only=false
 
 usage() {
@@ -13,6 +14,8 @@ Usage: scripts/deploy.sh [options]
 Options:
   --terraform-dir <path>  Terraform configuration directory
   --registry-html <path>  Model Gateway Registry HTML file
+  --registry-template <path>
+                          Read catalog markers from this template and write --registry-html
   --plan-only             Create the saved plan without applying it
   -h, --help              Show this help
 EOF
@@ -40,6 +43,11 @@ while [[ $# -gt 0 ]]; do
       registry_html="$2"
       shift 2
       ;;
+    --registry-template)
+      require_value "$1" "${2:-}"
+      registry_template="$2"
+      shift 2
+      ;;
     --plan-only)
       plan_only=true
       shift
@@ -60,8 +68,12 @@ if [[ ! -d "$terraform_dir" ]]; then
   echo "FAIL  Terraform directory does not exist: $terraform_dir" >&2
   exit 1
 fi
-if [[ ! -f "$registry_html" ]]; then
+if [[ -z "$registry_template" && ! -f "$registry_html" ]]; then
   echo "FAIL  Registry HTML does not exist: $registry_html" >&2
+  exit 1
+fi
+if [[ -n "$registry_template" && ! -f "$registry_template" ]]; then
+  echo "FAIL  Registry template does not exist: $registry_template" >&2
   exit 1
 fi
 if ! command -v terraform >/dev/null 2>&1; then
@@ -75,6 +87,9 @@ fi
 
 terraform_dir="$(cd "$terraform_dir" && pwd)"
 registry_html="$(cd "$(dirname "$registry_html")" && pwd)/$(basename "$registry_html")"
+if [[ -n "$registry_template" ]]; then
+  registry_template="$(cd "$(dirname "$registry_template")" && pwd)/$(basename "$registry_template")"
+fi
 plan_path="$terraform_dir/gateway-deploy.tfplan"
 generator_path="$script_dir/generate-model-gateway-registry.mjs"
 
@@ -93,4 +108,11 @@ if [[ "$plan_only" == true ]]; then
 fi
 
 terraform "-chdir=$terraform_dir" apply "$plan_path"
-node "$generator_path" --terraform-dir "$terraform_dir" --html "$registry_html"
+generator_args=(
+  --terraform-dir "$terraform_dir"
+  --html "$registry_html"
+)
+if [[ -n "$registry_template" ]]; then
+  generator_args+=(--template-html "$registry_template")
+fi
+node "$generator_path" "${generator_args[@]}"

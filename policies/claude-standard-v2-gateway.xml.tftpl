@@ -1,0 +1,186 @@
+<policies>
+  <inbound>
+    <base />
+    <set-header name="api-key" exists-action="delete" />
+    <set-header name="x-api-key" exists-action="delete" />
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <validate-jwt header-name="Authorization"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized"
+                  require-expiration-time="true"
+                  require-scheme="Bearer"
+                  require-signed-tokens="true">
+      <openid-config url="${oidc_openid_config_url}" />
+      <audiences>
+        <audience>${oidc_audience}</audience>
+      </audiences>
+      <issuers>
+        <issuer>${oidc_issuer}</issuer>
+      </issuers>
+      <required-claims>
+        <claim name="${oidc_scope_claim}" match="any" separator=" ">
+          <value>${oidc_required_scope}</value>
+        </claim>
+        <claim name="${oidc_role_claim}" match="any" separator=",">
+          <value>${oidc_required_role}</value>
+        </claim>
+      </required-claims>
+    </validate-jwt>
+    <set-variable name="accessToken" value="@{
+      var authorization = context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;);
+      return authorization.StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase)
+        ? authorization.Substring(7).Trim()
+        : &quot;&quot;;
+    }" />
+    <set-variable name="jwt" value="@{
+      var token = (string)context.Variables[&quot;accessToken&quot;];
+      return token.AsJwt();
+    }" />
+    <set-variable name="gatewayUserId" value="@{
+      var jwt = (Jwt)context.Variables[&quot;jwt&quot;];
+      var issuer = jwt == null ? &quot;unknown&quot; : jwt.Issuer;
+      var subject = jwt == null ? &quot;unknown&quot; : jwt.Subject;
+      return issuer + &quot;:&quot; + subject;
+    }" />
+    <set-variable name="gatewayUserHash" value="@{
+      var userId = (string)context.Variables[&quot;gatewayUserId&quot;];
+      var bytes = Encoding.UTF8.GetBytes(userId);
+      using (var algorithm = SHA256.Create())
+      {
+        return BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace(&quot;-&quot;, &quot;&quot;).ToLowerInvariant();
+      }
+    }" />
+    <set-variable name="gatewayUserLabel" value="@{
+      var jwt = (Jwt)context.Variables[&quot;jwt&quot;];
+      return jwt == null
+        ? &quot;unknown&quot;
+        : jwt.Claims.GetValueOrDefault(&quot;${oidc_user_label_claim}&quot;, jwt.Subject);
+    }" />
+    <choose>
+      <when condition="@(context.Request.Method != &quot;POST&quot; || context.Request.Body == null)">
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-body>{"error":{"type":"invalid_request_error","message":"A JSON body is required."}}</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <set-variable name="requestBody" value="@{
+      try
+      {
+        return context.Request.Body.As&lt;JObject&gt;(preserveContent: true);
+      }
+      catch
+      {
+        return null;
+      }
+    }" />
+    <choose>
+      <when condition="@((JObject)context.Variables[&quot;requestBody&quot;] == null)">
+        <return-response>
+          <set-status code="400" reason="Bad Request" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-body>{"error":{"type":"invalid_request_error","message":"The request body must be a JSON object."}}</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <set-variable name="requestedModel" value="@{
+      var body = (JObject)context.Variables[&quot;requestBody&quot;];
+      return body[&quot;model&quot;] == null ? &quot;&quot; : body[&quot;model&quot;].ToString().Trim();
+    }" />
+    <choose>
+      <when condition="@{
+        var model = (string)context.Variables[&quot;requestedModel&quot;];
+        return string.IsNullOrEmpty(model) ||
+          !(new [] { ${claude_model_prefixes} }).Any(prefix =>
+            model.StartsWith(prefix, StringComparison.Ordinal)
+          );
+      }">
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-body>@{
+            var model = (string)context.Variables[&quot;requestedModel&quot;];
+            var message = string.IsNullOrEmpty(model)
+              ? &quot;The model field is required.&quot;
+              : &quot;The requested model is not in an allowed Claude family.&quot;;
+            return new JObject(
+              new JProperty(&quot;error&quot;, new JObject(
+                new JProperty(&quot;type&quot;, &quot;permission_error&quot;),
+                new JProperty(&quot;message&quot;, message)
+              ))
+            ).ToString(Newtonsoft.Json.Formatting.None);
+          }</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <trace source="${trace_source}" severity="information">
+      <message>@{
+        return new JObject(
+          new JProperty(&quot;event&quot;, &quot;claude_gateway_request&quot;),
+          new JProperty(&quot;correlationId&quot;, context.RequestId.ToString()),
+          new JProperty(&quot;userHash&quot;, (string)context.Variables[&quot;gatewayUserHash&quot;]),
+          new JProperty(&quot;userLabel&quot;, (string)context.Variables[&quot;gatewayUserLabel&quot;]),
+          new JProperty(&quot;subscriptionId&quot;, context.Subscription == null ? &quot;none&quot; : context.Subscription.Id),
+          new JProperty(&quot;subscriptionName&quot;, context.Subscription == null || string.IsNullOrWhiteSpace(context.Subscription.Name) ? &quot;none&quot; : context.Subscription.Name),
+          new JProperty(&quot;requestedModel&quot;, (string)context.Variables[&quot;requestedModel&quot;])
+        ).ToString(Newtonsoft.Json.Formatting.None);
+      }</message>
+      <metadata name="correlationId" value="@(context.RequestId.ToString())" />
+      <metadata name="userHash" value="@((string)context.Variables[&quot;gatewayUserHash&quot;])" />
+      <metadata name="subscriptionId" value="@(context.Subscription == null ? &quot;none&quot; : context.Subscription.Id)" />
+      <metadata name="requestedModel" value="@((string)context.Variables[&quot;requestedModel&quot;])" />
+    </trace>
+    <llm-emit-token-metric namespace="${token_metric_namespace}">
+      <dimension name="API ID" />
+      <dimension name="Model" value="@((string)context.Variables[&quot;requestedModel&quot;])" />
+      <dimension name="User Hash" value="@((string)context.Variables[&quot;gatewayUserHash&quot;])" />
+      <dimension name="Subscription ID" value="@(context.Subscription == null ? &quot;none&quot; : context.Subscription.Id)" />
+      <dimension name="Subscription Name" value="@(context.Subscription == null || string.IsNullOrWhiteSpace(context.Subscription.Name) ? &quot;none&quot; : context.Subscription.Name)" />
+    </llm-emit-token-metric>
+%{ if user_token_limit > 0 ~}
+    <llm-token-limit counter-key="@((string)context.Variables[&quot;gatewayUserHash&quot;] + &quot;:&quot; + (string)context.Variables[&quot;requestedModel&quot;])"
+                     tokens-per-minute="${user_token_limit}"
+                     estimate-prompt-tokens="true"
+                     remaining-tokens-header-name="x-ratelimit-remaining-tokens"
+                     tokens-consumed-header-name="x-ratelimit-consumed-tokens" />
+%{ endif ~}
+    <set-backend-service backend-id="${backend_id}" />
+    <rewrite-uri template="/v1/messages" copy-unmatched-params="true" />
+    <set-header name="x-databricks-use-coding-agent-mode" exists-action="override">
+      <value>true</value>
+    </set-header>
+    <authentication-managed-identity resource="${databricks_token_audience}"
+                                     output-token-variable-name="databricksToken"
+                                     ignore-error="false" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@(&quot;Bearer &quot; + (string)context.Variables[&quot;databricksToken&quot;])</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <forward-request timeout="300" buffer-request-body="false" buffer-response="false" />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <trace source="${trace_source}" severity="error">
+      <message>@{
+        return new JObject(
+          new JProperty(&quot;event&quot;, &quot;claude_gateway_error&quot;),
+          new JProperty(&quot;correlationId&quot;, context.RequestId.ToString()),
+          new JProperty(&quot;userHash&quot;, context.Variables.GetValueOrDefault&lt;string&gt;(&quot;gatewayUserHash&quot;, &quot;unknown&quot;)),
+          new JProperty(&quot;requestedModel&quot;, context.Variables.GetValueOrDefault&lt;string&gt;(&quot;requestedModel&quot;, &quot;unknown&quot;)),
+          new JProperty(&quot;reason&quot;, context.LastError == null ? &quot;unknown&quot; : context.LastError.Reason)
+        ).ToString(Newtonsoft.Json.Formatting.None);
+      }</message>
+    </trace>
+    <base />
+  </on-error>
+</policies>

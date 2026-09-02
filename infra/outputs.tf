@@ -9,7 +9,7 @@ output "service_gateway_base_url" {
 }
 
 output "apim_public_ip_addresses" {
-  description = "Gateway egress IPs allowed through the Foundry firewall. Static unless the instance is recreated or moved into a VNet."
+  description = "Classic gateway egress IPs allowed through the Azure AI Services firewall."
   value       = azurerm_api_management.apim.public_ip_addresses
 }
 
@@ -113,8 +113,8 @@ output "api_catalog_manifest" {
       foundry_account_name = try(azurerm_cognitive_account.foundry["gateway"].name, null)
     }
     backend_identity = {
-      audience = "https://ai.azure.com"
-      role     = "Cognitive Services User"
+      audience = "https://cognitiveservices.azure.com"
+      role     = "Cognitive Services OpenAI User"
     }
     models = local.api_catalog_models
   }
