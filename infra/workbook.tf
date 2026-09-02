@@ -7,7 +7,7 @@ locals {
 
   governance_price_rows = join(",\n", [
     for model_name in local.governance_model_names :
-    "  ${jsonencode(model_name)}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].input, 0))}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].output, 0))}"
+    "  ${jsonencode(model_name)}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].input, 0))}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].cached_input, 0))}, ${jsonencode(try(var.model_pricing_usd_per_million[model_name].output, 0))}"
   ])
 
   governance_capacity_rows = join(",\n", [
@@ -17,11 +17,11 @@ locals {
 
   governance_pricing_summary = join(" · ", [
     for model_name in local.governance_model_names :
-    "${model_name}: input ${try(var.model_pricing_usd_per_million[model_name].input, 0)} / output ${try(var.model_pricing_usd_per_million[model_name].output, 0)} USD per 1M"
+    "${model_name}: input ${try(var.model_pricing_usd_per_million[model_name].input, 0)} / cached input ${try(var.model_pricing_usd_per_million[model_name].cached_input, 0)} / output ${try(var.model_pricing_usd_per_million[model_name].output, 0)} USD per 1M"
   ])
 
   governance_base_query = <<-KQL
-    let ModelPrices = datatable(Model:string, InputUsdPerMillion:real, OutputUsdPerMillion:real) [
+    let ModelPrices = datatable(Model:string, InputUsdPerMillion:real, CachedInputUsdPerMillion:real, OutputUsdPerMillion:real) [
     ${local.governance_price_rows}
     ];
     let ModelLimits = datatable(Model:string, TpmLimit:long) [
@@ -61,6 +61,11 @@ locals {
         | where ApiId in ("model-gateway", "service-model-gateway")
         | where OperationId in ("chat-completions", "responses")
     );
+    let UserDirectory = materialize(
+        Gateway
+        | summarize arg_max(RequestTime, UserLabel) by UserId
+        | project UserId, UserLabel
+    );
     let Tokens = materialize(
         ApiManagementGatewayLlmLog
         | summarize arg_max(TimeGenerated, *) by CorrelationId
@@ -77,18 +82,58 @@ locals {
         Gateway
         | join kind=leftouter Tokens on CorrelationId
         | extend Model = coalesce(DeploymentName, ModelName, RequestedModel, "unknown")
-        | join kind=leftouter ModelPrices on Model
         | extend
             PromptTokens = coalesce(PromptTokens, tolong(0)),
             CompletionTokens = coalesce(CompletionTokens, tolong(0)),
-            TotalTokens = coalesce(TotalTokens, tolong(0)),
+            TotalTokens = coalesce(TotalTokens, tolong(0))
+        | extend
+            IsSuccess = ResponseCode between (200 .. 299)
+    );
+    let MetricRows = materialize(
+        AppMetrics
+        | where TimeGenerated {TimeRange}
+        | where Name in ("Prompt Tokens", "Prompt Cached Tokens", "Completion Tokens")
+        | extend Dimensions = todynamic(Properties)
+        | project
+            MetricTime = TimeGenerated,
+            MetricName = Name,
+            TokenValue = tolong(Sum),
+            UserId = iff(isempty(tostring(Dimensions["User Hash"])), "anonymous", tostring(Dimensions["User Hash"])),
+            SubscriptionId = iff(isempty(tostring(Dimensions["Subscription ID"])), "none", tostring(Dimensions["Subscription ID"])),
+            SubscriptionName = iff(isempty(tostring(Dimensions["Subscription Name"])), "none", tostring(Dimensions["Subscription Name"])),
+            Model = iff(isempty(tostring(Dimensions.Model)), "unknown", tostring(Dimensions.Model))
+    );
+    let Usage = materialize(
+        MetricRows
+        | summarize
+            PromptTokens = sumif(TokenValue, MetricName == "Prompt Tokens"),
+            CachedInputTokens = sumif(TokenValue, MetricName == "Prompt Cached Tokens"),
+            CompletionTokens = sumif(TokenValue, MetricName == "Completion Tokens")
+          by UserId, SubscriptionId, SubscriptionName, Model
+        | extend
+            UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, tolong(0)),
+            TotalTokens = PromptTokens + CompletionTokens
+        | join kind=leftouter UserDirectory on UserId
+        | extend UserLabel = iff(
+            isempty(UserLabel),
+            iff(UserId == "anonymous", "anonymous", substring(UserId, 0, 12)),
+            UserLabel
+          )
+        | join kind=leftouter ModelPrices on Model
+        | extend
             InputUsdPerMillion = coalesce(InputUsdPerMillion, 0.0),
+            CachedInputUsdPerMillion = coalesce(CachedInputUsdPerMillion, 0.0),
             OutputUsdPerMillion = coalesce(OutputUsdPerMillion, 0.0)
         | extend
-            IsSuccess = ResponseCode between (200 .. 299),
-            IsPriceConfigured = InputUsdPerMillion > 0.0 or OutputUsdPerMillion > 0.0,
+            CachedInputSharePct = iff(
+                PromptTokens == 0,
+                0.0,
+                round(100.0 * todouble(CachedInputTokens) / todouble(PromptTokens), 2)
+            ),
+            IsPriceConfigured = InputUsdPerMillion > 0.0 or CachedInputUsdPerMillion > 0.0 or OutputUsdPerMillion > 0.0,
             EstimatedCostUsd =
-                todouble(PromptTokens) * InputUsdPerMillion / 1000000.0
+                todouble(UncachedInputTokens) * InputUsdPerMillion / 1000000.0
+                + todouble(CachedInputTokens) * CachedInputUsdPerMillion / 1000000.0
                 + todouble(CompletionTokens) * OutputUsdPerMillion / 1000000.0
     );
   KQL
@@ -134,7 +179,7 @@ locals {
           json = <<-MARKDOWN
             # LLM Gateway Governance
 
-            사용자·모델별 사용량, 토큰, 비용 추정, 오류, 지연, 모델 TPM headroom과 APIM 용량을 한 화면에서 확인합니다.
+            사용자·모델별 사용량, uncached/cached input token, 비용 추정, 오류, 지연, 모델 TPM headroom과 APIM 용량을 한 화면에서 확인합니다.
             사용자 식별자는 `tid:oid` 또는 `iss:sub`의 SHA-256 해시이며 이름·메일·원본 object ID는 저장하지 않습니다.
 
             **모델 한도:** ${join(" · ", [for model_name in local.routed_models : "${model_name} ${local.model_capacity_tpm[model_name]} TPM"])}
@@ -202,25 +247,32 @@ locals {
                 (RequestData
                  | summarize Value = todouble(count())
                  | extend SortOrder = 2, Metric = "Requests"),
-                (RequestData
-                 | summarize Value = todouble(sum(PromptTokens))
-                 | extend SortOrder = 3, Metric = "Prompt tokens"),
-                (RequestData
+                (Usage
+                 | summarize Value = todouble(sum(UncachedInputTokens))
+                 | extend SortOrder = 3, Metric = "Uncached input tokens"),
+                (Usage
+                 | summarize Value = todouble(sum(CachedInputTokens))
+                 | extend SortOrder = 4, Metric = "Cached input tokens"),
+                (Usage
                  | summarize Value = todouble(sum(CompletionTokens))
-                 | extend SortOrder = 4, Metric = "Completion tokens"),
-                (RequestData
+                 | extend SortOrder = 5, Metric = "Completion tokens"),
+                (Usage
                  | summarize Value = todouble(sum(TotalTokens))
-                 | extend SortOrder = 5, Metric = "Total tokens"),
-                (RequestData
+                 | extend SortOrder = 6, Metric = "Total tokens"),
+                (Usage
                  | summarize Value = round(sum(EstimatedCostUsd), 4)
-                 | extend SortOrder = 6, Metric = "Estimated cost (USD)"),
+                 | extend SortOrder = 7, Metric = "Estimated cost (USD)"),
+                (Usage
+                 | summarize Prompt = sum(PromptTokens), Cached = sum(CachedInputTokens)
+                 | extend Value = iff(Prompt == 0, 0.0, round(100.0 * todouble(Cached) / todouble(Prompt), 2))
+                 | extend SortOrder = 8, Metric = "Cached input share (%)"),
                 (RequestData
                  | summarize Requests = count(), Successful = countif(IsSuccess)
                  | extend Value = iff(Requests == 0, 0.0, round(100.0 * todouble(Successful) / todouble(Requests), 2))
-                 | extend SortOrder = 7, Metric = "Success rate (%)"),
+                 | extend SortOrder = 9, Metric = "Success rate (%)"),
                 (RequestData
                  | summarize Value = round(percentile(TotalTimeMs, 95), 0)
-                 | extend SortOrder = 8, Metric = "End-to-end p95 (ms)")
+                 | extend SortOrder = 10, Metric = "End-to-end p95 (ms)")
             | project SortOrder, Metric, Value
             | order by SortOrder asc
           KQL
@@ -252,21 +304,24 @@ locals {
         name        = "token-volume"
         customWidth = "50"
         content = merge(local.governance_query_common, {
-          title         = "Prompt and completion tokens by model"
+          title         = "Token volume including cached input"
           visualization = "timechart"
           query         = <<-KQL
             ${local.governance_base_query}
             let Grain = {TimeRange:grain};
             let TokenSeries =
-                RequestData
+                MetricRows
                 | where Model != "unknown"
                 | summarize
-                    PromptTokens = sum(PromptTokens),
-                    CompletionTokens = sum(CompletionTokens)
-                    by TimeGenerated = bin(RequestTime, Grain), Model;
+                    PromptTokens = sumif(TokenValue, MetricName == "Prompt Tokens"),
+                    CachedInputTokens = sumif(TokenValue, MetricName == "Prompt Cached Tokens"),
+                    CompletionTokens = sumif(TokenValue, MetricName == "Completion Tokens")
+                    by TimeGenerated = bin(MetricTime, Grain), Model
+                | extend UncachedInputTokens = max_of(PromptTokens - CachedInputTokens, tolong(0));
             union
-                (TokenSeries | project TimeGenerated, Series = strcat(Model, " prompt"), Value = PromptTokens),
-                (TokenSeries | project TimeGenerated, Series = strcat(Model, " completion"), Value = CompletionTokens)
+                (TokenSeries | project TimeGenerated, Series = strcat(Model, " uncached input"), Value = UncachedInputTokens),
+                (TokenSeries | project TimeGenerated, Series = strcat(Model, " cached input"), Value = CachedInputTokens),
+                (TokenSeries | project TimeGenerated, Series = strcat(Model, " output"), Value = CompletionTokens)
             | order by TimeGenerated asc
           KQL
         })
@@ -279,24 +334,40 @@ locals {
           gridSettings = local.governance_grid_settings
           query        = <<-KQL
             ${local.governance_base_query}
-            RequestData
+            let RequestSummary =
+                RequestData
+                | where Model != "unknown"
+                | summarize
+                    Requests = count(),
+                    Successful = countif(IsSuccess),
+                    P95LatencyMs = round(percentile(TotalTimeMs, 95), 0)
+                    by Model;
+            Usage
             | where Model != "unknown"
             | summarize
-                Requests = count(),
                 ActiveUsers = dcountif(UserId, UserId != "anonymous"),
+                UncachedInputTokens = sum(UncachedInputTokens),
+                CachedInputTokens = sum(CachedInputTokens),
                 PromptTokens = sum(PromptTokens),
                 CompletionTokens = sum(CompletionTokens),
                 TotalTokens = sum(TotalTokens),
                 EstimatedCostUsd = round(sum(EstimatedCostUsd), 4),
-                Successful = countif(IsSuccess),
-                P95LatencyMs = round(percentile(TotalTimeMs, 95), 0),
                 PriceConfiguredRows = countif(IsPriceConfigured)
                 by Model
+            | join kind=leftouter RequestSummary on Model
             | extend
-                SuccessRatePct = round(100.0 * todouble(Successful) / todouble(Requests), 2),
+                CachedInputSharePct = iff(
+                    PromptTokens == 0,
+                    0.0,
+                    round(100.0 * todouble(CachedInputTokens) / todouble(PromptTokens), 2)
+                ),
+                Requests = coalesce(Requests, tolong(0)),
+                Successful = coalesce(Successful, tolong(0)),
+                SuccessRatePct = iff(Requests == 0, 0.0, round(100.0 * todouble(Successful) / todouble(Requests), 2)),
                 Pricing = iff(PriceConfiguredRows > 0, "configured", "zero/unset")
-            | project Model, Requests, ActiveUsers, PromptTokens, CompletionTokens, TotalTokens,
-                EstimatedCostUsd, Pricing, SuccessRatePct, P95LatencyMs
+            | project Model, Requests, ActiveUsers, UncachedInputTokens, CachedInputTokens,
+                CachedInputSharePct, CompletionTokens, TotalTokens, EstimatedCostUsd, Pricing,
+                SuccessRatePct, P95LatencyMs
             | order by TotalTokens desc
           KQL
         })
@@ -344,10 +415,10 @@ locals {
           visualization = "barchart"
           query         = <<-KQL
             ${local.governance_base_query}
-            RequestData
+            Usage
             | where UserId != "anonymous"
-            | summarize TotalTokens = sum(TotalTokens), arg_max(RequestTime, UserLabel) by UserId
-            | project User = UserLabel, TotalTokens
+            | summarize TotalTokens = sum(TotalTokens), User = any(UserLabel) by UserId
+            | project User, TotalTokens
             | top 10 by TotalTokens desc
           KQL
         })
@@ -362,7 +433,7 @@ locals {
           query         = <<-KQL
             ${local.governance_base_query}
             let Users =
-                RequestData
+                Usage
                 | where UserId != "anonymous"
                 | summarize Tokens = sum(TotalTokens) by UserId
                 | order by Tokens desc
@@ -390,7 +461,7 @@ locals {
           query        = <<-KQL
             ${local.governance_base_query}
             let AllTokens = toscalar(
-                RequestData
+                Usage
                 | where UserId != "anonymous"
                 | summarize sum(TotalTokens)
             );
@@ -401,38 +472,53 @@ locals {
             let Peaks =
                 PerMinute
                 | summarize PeakRPM = max(RPM), PeakTPM = max(TPM) by UserId;
-            RequestData
+            let RequestSummary =
+                RequestData
+                | where UserId != "anonymous"
+                | summarize
+                    Requests = count(),
+                    Successful = countif(IsSuccess),
+                    RateLimited429 = countif(ResponseCode == 429),
+                    Forbidden403 = countif(ResponseCode == 403),
+                    ServerErrors = countif(ResponseCode >= 500),
+                    P95LatencyMs = round(percentile(TotalTimeMs, 95), 0),
+                    Models = strcat_array(make_set(Model, 10), ", "),
+                    LastSeen = max(RequestTime)
+                    by UserId;
+            Usage
             | where UserId != "anonymous"
             | summarize
-                arg_max(RequestTime, UserLabel),
-                Requests = count(),
+                User = any(UserLabel),
+                UncachedInputTokens = sum(UncachedInputTokens),
+                CachedInputTokens = sum(CachedInputTokens),
                 PromptTokens = sum(PromptTokens),
                 CompletionTokens = sum(CompletionTokens),
                 TotalTokens = sum(TotalTokens),
-                EstimatedCostUsd = round(sum(EstimatedCostUsd), 4),
-                Successful = countif(IsSuccess),
-                RateLimited429 = countif(ResponseCode == 429),
-                Forbidden403 = countif(ResponseCode == 403),
-                ServerErrors = countif(ResponseCode >= 500),
-                P95LatencyMs = round(percentile(TotalTimeMs, 95), 0),
-                Models = strcat_array(make_set(Model, 10), ", "),
-                LastSeen = max(RequestTime)
+                EstimatedCostUsd = round(sum(EstimatedCostUsd), 4)
                 by UserId
+            | join kind=leftouter RequestSummary on UserId
             | join kind=leftouter Peaks on UserId
             | extend
-                User = UserLabel,
                 UserHash = UserId,
                 TokenSharePct = iff(AllTokens == 0, 0.0, round(100.0 * todouble(TotalTokens) / todouble(AllTokens), 2)),
-                SuccessRatePct = round(100.0 * todouble(Successful) / todouble(Requests), 2),
-                AverageTokensPerRequest = round(todouble(TotalTokens) / todouble(Requests), 0),
+                CachedInputSharePct = iff(
+                    PromptTokens == 0,
+                    0.0,
+                    round(100.0 * todouble(CachedInputTokens) / todouble(PromptTokens), 2)
+                ),
+                Requests = coalesce(Requests, tolong(0)),
+                Successful = coalesce(Successful, tolong(0)),
+                SuccessRatePct = iff(Requests == 0, 0.0, round(100.0 * todouble(Successful) / todouble(Requests), 2)),
+                AverageTokensPerRequest = iff(Requests == 0, 0.0, round(todouble(TotalTokens) / todouble(Requests), 0)),
                 UserLimitUtilizationPct = iff(
                     ${var.user_tokens_per_minute} > 0,
                     round(100.0 * todouble(PeakTPM) / todouble(${max(var.user_tokens_per_minute, 1)}), 2),
                     real(null)
                 )
-            | project User, UserHash, Requests, PromptTokens, CompletionTokens, TotalTokens, TokenSharePct,
-                EstimatedCostUsd, AverageTokensPerRequest, PeakRPM, PeakTPM, UserLimitUtilizationPct,
-                SuccessRatePct, P95LatencyMs, RateLimited429, Forbidden403, ServerErrors, Models, LastSeen
+            | project User, UserHash, Requests, UncachedInputTokens, CachedInputTokens, CachedInputSharePct,
+                CompletionTokens, TotalTokens, TokenSharePct, EstimatedCostUsd, AverageTokensPerRequest,
+                PeakRPM, PeakTPM, UserLimitUtilizationPct, SuccessRatePct, P95LatencyMs, RateLimited429,
+                Forbidden403, ServerErrors, Models, LastSeen
             | order by TotalTokens desc
           KQL
         })
@@ -485,15 +571,15 @@ locals {
           query         = <<-KQL
             ${local.governance_base_query}
             let Grain = {TimeRange:grain};
-            let Usage =
+            let ModelTpm =
                 RequestData
                 | where Model != "unknown"
                 | summarize Tokens = sum(TotalTokens) by TimeGenerated = bin(RequestTime, Grain), Model
                 | join kind=inner ModelLimits on Model
                 | extend TokensPerMinute = round(todouble(Tokens) / max_of(1.0, todouble(Grain / 1m)), 0);
             union
-                (Usage | project TimeGenerated, Series = strcat(Model, " actual"), Value = TokensPerMinute),
-                (Usage | project TimeGenerated, Series = strcat(Model, " limit"), Value = todouble(TpmLimit))
+                (ModelTpm | project TimeGenerated, Series = strcat(Model, " actual"), Value = TokensPerMinute),
+                (ModelTpm | project TimeGenerated, Series = strcat(Model, " limit"), Value = todouble(TpmLimit))
             | order by TimeGenerated asc
           KQL
         })
@@ -776,8 +862,12 @@ locals {
             ---
             **해석 주의**
 
+            * OpenAI `Prompt Tokens`에는 cached input이 포함되므로 uncached input은 `Prompt Tokens - Prompt Cached Tokens`로 계산합니다.
+            * `Prompt Cached Tokens`는 backend response가 cached-token 상세값을 제공하는 모델에서만 기록됩니다. 현재 GPT-5.6 계열을 기준으로 검증하며 Fireworks/xAI 모델은 0일 수 있습니다.
+            * GPT-5.6 cache write token은 현재 APIM preview metric에서 별도로 제공하지 않으므로 추정 비용에 포함되지 않습니다.
             * 스트리밍 요청이 중간 취소되면 usage 청크가 없어 zero-token으로 남을 수 있습니다.
             * `Estimated cost`는 Terraform의 `model_pricing_usd_per_million` 값만 사용하며 Azure 청구서가 아닙니다.
+            * APIM custom metric은 dimension당 최대 100개 값과 namespace당 최대 1,000 active time series 제한이 있어 사용자 수가 커지면 별도 telemetry pipeline이 필요합니다.
             * APIM Capacity 차트는 플랫폼 Metrics를 직접 조회합니다.
             * Gateway CPU/Memory metric은 APIM v2 SKU 전용입니다. 현재 classic SKU에서는 Capacity가 해당 상태 지표입니다.
             * 401은 사용자 claim을 읽기 전에 차단되므로 사용자 귀속 대상이 아닙니다.
@@ -798,7 +888,7 @@ resource "azurerm_application_insights_workbook" "governance" {
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   display_name        = var.governance_workbook_display_name
-  description         = "User, model, capacity, error, and latency governance for the LLM gateway."
+  description         = "User, model, cached input, cost, capacity, error, and latency governance for the LLM gateway."
   category            = "workbook"
   source_id           = lower(azurerm_log_analytics_workspace.law.id)
   data_json           = jsonencode(local.governance_workbook_data)

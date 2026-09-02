@@ -50,31 +50,37 @@ opencode_default_model = "gpt-5.6-sol"
 opencode_small_model   = "gpt-5.6-luna"
 
 # 거버넌스 Workbook의 선택적 비용 추정 단가다. 아래 값은 2026-08-04 공개 USD retail 단가다.
-# GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 일반 input/output 단가다.
-# Workbook은 cached input과 long-context를 구분하지 않으므로 실제 계약·사용 패턴에 맞게 교체한다.
+# GPT-5.6은 Global Standard short-context(요청 prompt 272K 미만)의 input/cached input/output 단가다.
+# GPT-5.6 cache write token은 현재 APIM metric에서 별도로 제공되지 않아 이 추정값에 포함되지 않는다.
 # Fireworks 모델은 Data Zone pay-per-token 단가이며 세금, 할인, 계약 단가는 반영하지 않는다.
+# Fireworks cached input 할인은 확인된 Azure meter가 없어 일반 input 단가와 동일하게 둔다.
 # Retail Prices API: https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices
 # Kimi K3: https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-kimi-k3-through-fireworks-ai-on-microsoft-foundry/4540187
 model_pricing_usd_per_million = {
   "gpt-5.6-sol" = {
-    input  = 5.00
-    output = 30.00
+    input        = 5.00
+    cached_input = 0.50
+    output       = 30.00
   }
   "gpt-5.6-terra" = {
-    input  = 2.00
-    output = 12.00
+    input        = 2.00
+    cached_input = 0.20
+    output       = 12.00
   }
   "gpt-5.6-luna" = {
-    input  = 0.20
-    output = 1.20
+    input        = 0.20
+    cached_input = 0.02
+    output       = 1.20
   }
   "FW-GLM-5.2" = {
-    input  = 1.54
-    output = 4.84
+    input        = 1.54
+    cached_input = 1.54
+    output       = 4.84
   }
   "FW-Kimi-K3" = {
-    input  = 3.30
-    output = 16.50
+    input        = 3.30
+    cached_input = 3.30
+    output       = 16.50
   }
 }
 

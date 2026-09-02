@@ -45,7 +45,7 @@ resource "azurerm_monitor_autoscale_setting" "apim" {
         metric_resource_id = azurerm_api_management.apim.id
         time_grain         = "PT1M"
         statistic          = "Average"
-        time_window        = "PT60M"
+        time_window        = "PT1H"
         time_aggregation   = "Average"
         operator           = "LessThan"
         threshold          = 30
@@ -55,7 +55,7 @@ resource "azurerm_monitor_autoscale_setting" "apim" {
         direction = "Decrease"
         type      = "ChangeCount"
         value     = "1"
-        cooldown  = "PT60M"
+        cooldown  = "PT1H"
       }
     }
   }

@@ -345,6 +345,17 @@ variable "log_retention_days" {
   }
 }
 
+variable "token_metric_namespace" {
+  type        = string
+  default     = "ModelGateway"
+  description = "Application Insights custom metric namespace used by llm-emit-token-metric."
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9._-]{0,63}$", var.token_metric_namespace))
+    error_message = "token_metric_namespace must start with a letter and be at most 64 letters, numbers, dots, underscores, or hyphens."
+  }
+}
+
 variable "governance_workbook_display_name" {
   description = "Display name of the Azure Monitor workbook deployed with the gateway."
   type        = string
@@ -357,18 +368,19 @@ variable "governance_workbook_display_name" {
 }
 
 variable "model_pricing_usd_per_million" {
-  description = "Optional model input/output prices in USD per 1M tokens for workbook cost estimates. Missing models are priced at zero."
+  description = "Optional model input, cached input, and output prices in USD per 1M tokens for workbook cost estimates. Missing models are priced at zero."
   type = map(object({
-    input  = number
-    output = number
+    input        = number
+    cached_input = optional(number, 0)
+    output       = number
   }))
   default = {}
 
   validation {
     condition = alltrue([
       for pricing in values(var.model_pricing_usd_per_million) :
-      pricing.input >= 0 && pricing.output >= 0
+      pricing.input >= 0 && pricing.cached_input >= 0 && pricing.output >= 0
     ])
-    error_message = "Model input and output prices must be zero or greater."
+    error_message = "Model input, cached input, and output prices must be zero or greater."
   }
 }
