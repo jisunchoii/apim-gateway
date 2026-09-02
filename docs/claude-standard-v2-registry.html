@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Standard v2 Gateway Registry</title>
+  <style>
+    :root {
+      --cp-bg: #f4f7fb;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f8fafc;
+      --cp-text: #172033;
+      --cp-muted: #65738a;
+      --cp-border: #dbe3ef;
+      --cp-accent: #2563eb;
+      --cp-accent-soft: #e8f0ff;
+      --cp-success: #137a4a;
+      --cp-code: #101827;
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    header {
+      padding: 30px 24px 24px;
+      background: linear-gradient(135deg, #111a2e, #19386f);
+      color: #fff;
+    }
+
+    header div,
+    main,
+    footer {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(25px, 4vw, 38px);
+    }
+
+    header p {
+      max-width: 760px;
+      margin: 0;
+      color: #d7e4ff;
+      line-height: 1.6;
+    }
+
+    main {
+      padding: 24px 0 36px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--cp-border);
+      border-radius: 14px;
+      background: var(--cp-surface);
+      box-shadow: 0 8px 24px rgba(23, 32, 51, 0.06);
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--cp-muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 18px;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 19px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 12px;
+      border-bottom: 1px solid var(--cp-border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--cp-muted);
+      font-size: 12px;
+    }
+
+    code {
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: var(--cp-accent-soft);
+      color: #174ea6;
+      font-family: Consolas, "Courier New", monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .step {
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--cp-surface-soft);
+      color: var(--cp-muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--cp-text);
+    }
+
+    .status {
+      color: var(--cp-success);
+      font-weight: 700;
+    }
+
+    footer {
+      padding: 0 0 28px;
+      color: var(--cp-muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .grid,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Claude Standard v2 Gateway</h1>
+      <p>
+        Korea Central Standard v2 APIM에서 Keycloak 인증 후 Azure Databricks
+        Anthropic Messages API로 전달하는 Claude 전용 catalog입니다.
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section class="grid" id="summary"></section>
+
+    <section class="card">
+      <h2>요청 흐름</h2>
+      <div class="flow">
+        <div class="step"><strong>Claude Code</strong>Keycloak bearer token</div>
+        <div class="step"><strong>Standard v2 APIM</strong>JWT와 model family 검증</div>
+        <div class="step"><strong>Managed Identity</strong>Databricks audience token</div>
+        <div class="step"><strong>Unity AI Gateway</strong>Anthropic SSE passthrough</div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:18px">
+      <h2>Claude 모델</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Family</th>
+              <th>현재 기본 모델</th>
+              <th>허용 prefix</th>
+            </tr>
+          </thead>
+          <tbody id="models"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Terraform output <code>api_catalog_manifest</code>에서 생성됩니다.
+    <span id="generated-at"></span>
+  </footer>
+    <!-- BEGIN_TERRAFORM_CATALOG -->
+    <script id="terraform-api-catalog">
+      window.__TERRAFORM_CATALOG__ =
+      {
+        "backend_identity": {
+          "audience": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d",
+          "role": "Workspace-assigned Databricks service principal with system.ai model EXECUTE"
+        },
+        "gateway": {
+          "claude_base_url": "https://apim-llmgw-claude-dev-krc-s0fyo3.azure-api.net/anthropic",
+          "claude_model": "system.ai.claude-sonnet-5",
+          "claude_models": {
+            "fable": "system.ai.claude-fable-5",
+            "haiku": "system.ai.claude-haiku-4-5",
+            "opus": "system.ai.claude-opus-5",
+            "sonnet": "system.ai.claude-sonnet-5"
+          },
+          "generation": "claude-standard-v2",
+          "location": "koreacentral",
+          "name": "apim-llmgw-claude-dev-krc-s0fyo3",
+          "nat_gateway_public_ip": "72.155.120.98",
+          "oidc_base_url": null,
+          "service_base_url": null,
+          "tier": "StandardV2",
+          "token_metric_namespace": "ClaudeGateway"
+        },
+        "models": [],
+        "schema_version": 1,
+        "generated_at": "2026-09-02T05:36:51.737Z"
+      };
+    </script>
+    <!-- END_TERRAFORM_CATALOG -->
+
+  <script>
+    const catalog = window.__TERRAFORM_CATALOG__;
+    const gateway = catalog.gateway || {};
+    const models = gateway.claude_models || {};
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+
+    const summary = [
+      ["APIM", gateway.name],
+      ["Tier / Region", `${gateway.tier || ""} / ${gateway.location || ""}`],
+      ["Base URL", gateway.claude_base_url]
+    ];
+    document.getElementById("summary").innerHTML = summary.map(([label, value]) => `
+      <article class="card">
+        <span class="label">${escapeHtml(label)}</span>
+        <span class="value">${escapeHtml(value)}</span>
+      </article>
+    `).join("");
+
+    const prefixes = {
+      opus: "system.ai.claude-opus-*",
+      sonnet: "system.ai.claude-sonnet-*",
+      haiku: "system.ai.claude-haiku-*",
+      fable: "system.ai.claude-fable-*"
+    };
+    document.getElementById("models").innerHTML = Object.entries(models).map(([family, model]) => `
+      <tr>
+        <td class="status">${escapeHtml(family)}</td>
+        <td><code>${escapeHtml(model)}</code></td>
+        <td><code>${escapeHtml(prefixes[family] || "")}</code></td>
+      </tr>
+    `).join("");
+
+    if (catalog.generated_at) {
+      document.getElementById("generated-at").textContent =
+        ` 마지막 생성: ${new Date(catalog.generated_at).toLocaleString("ko-KR")}`;
+    }
+  </script>
+</body>
+</html>

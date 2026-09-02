@@ -12,7 +12,8 @@ function parseArgs(argv) {
   const repoRoot = path.resolve(scriptDirectory, "..");
   const options = {
     terraformDirectory: path.join(repoRoot, "infra"),
-    htmlPath: path.join(repoRoot, "docs", "model-gateway-registry.html")
+    htmlPath: path.join(repoRoot, "docs", "model-gateway-registry.html"),
+    templatePath: null
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -21,6 +22,8 @@ function parseArgs(argv) {
       options.terraformDirectory = path.resolve(argv[++index]);
     } else if (argument === "--html") {
       options.htmlPath = path.resolve(argv[++index]);
+    } else if (argument === "--template-html") {
+      options.templatePath = path.resolve(argv[++index]);
     } else {
       throw new Error(`Unknown argument: ${argument}`);
     }
@@ -43,6 +46,14 @@ function readTerraformManifest(terraformDirectory) {
   const manifest = JSON.parse(result.stdout);
   if (manifest?.schema_version !== 1 || !manifest.gateway || !Array.isArray(manifest.models)) {
     throw new Error("api_catalog_manifest does not match schema version 1");
+  }
+  if (
+    manifest.gateway.generation === "claude-standard-v2" &&
+    (manifest.models.length !== 0 || !manifest.gateway.claude_models)
+  ) {
+    throw new Error(
+      "claude-standard-v2 manifest must contain claude_models and no OpenAI/Fireworks model rows"
+    );
   }
   return manifest;
 }
@@ -71,13 +82,14 @@ function renderCatalogBlock(manifest) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const manifest = readTerraformManifest(options.terraformDirectory);
-  const html = await readFile(options.htmlPath, "utf8");
+  const sourcePath = options.templatePath || options.htmlPath;
+  const html = await readFile(sourcePath, "utf8");
   const markerPattern = new RegExp(
     `\\s*${BEGIN_MARKER}[\\s\\S]*?${END_MARKER}`
   );
 
   if (!markerPattern.test(html)) {
-    throw new Error(`Terraform catalog markers are missing from ${options.htmlPath}`);
+    throw new Error(`Terraform catalog markers are missing from ${sourcePath}`);
   }
 
   const updated = html.replace(markerPattern, `\n${renderCatalogBlock(manifest)}`);
