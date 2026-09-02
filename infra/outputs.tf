@@ -125,6 +125,11 @@ output "trace_source" {
   value       = local.trace_source
 }
 
+output "application_insights_resource_id" {
+  description = "Workspace-based Application Insights resource used for Classic gateway token metrics."
+  value       = azurerm_application_insights.gateway.id
+}
+
 output "governance_workbook_id" {
   description = "Resource ID of the Azure Monitor governance workbook."
   value       = azurerm_application_insights_workbook.governance.id

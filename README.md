@@ -469,6 +469,7 @@ Prompt, access token, refresh token과 고객 데이터는 지원 요청에 첨�
 - APIM에서 Foundry로의 인증은 Managed Identity와 Azure RBAC를 사용합니다.
 - APIM은 Keycloak의 `iss:sub`를 SHA-256으로 해시하여 사용자별 사용량을 집계합니다.
 - Workbook 표시용 Keycloak username은 `userLabel`로 Azure Monitor trace에 저장됩니다.
+- Classic Workbook은 GPT cached input token과 discounted input 비용을 Application Insights metric으로 집계합니다.
 - Gateway 진단 로그에는 prompt와 model output을 저장하지 않습니다.
 - Keycloak client는 public client이며 client secret을 사용하지 않습니다.
 

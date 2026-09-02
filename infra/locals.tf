@@ -32,6 +32,7 @@ locals {
   apim_name         = "apim-${local.name_suffix}-${local.sfx}"
   foundry_name      = "ais-${local.name_suffix}-${local.sfx}"
   foundry_openai_v1 = "https://${local.foundry_name}.openai.azure.com/openai/v1"
+  app_insights_name = "appi-${local.name_suffix}"
 
   managed_foundry_account_enabled = coalesce(
     var.managed_foundry_account_enabled,
@@ -132,5 +133,6 @@ locals {
     model_backend_ids      = local.routed_model_backend_ids
     model_auth_resources   = local.routed_model_auth_resources
     trace_source           = local.trace_source
+    token_metric_namespace = var.token_metric_namespace
   }
 }

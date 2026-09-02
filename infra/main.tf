@@ -35,13 +35,14 @@ resource "azurerm_api_management" "apim" {
 resource "azurerm_cognitive_account" "foundry" {
   for_each = local.managed_foundry_accounts
 
-  name                  = local.foundry_name
-  resource_group_name   = azurerm_resource_group.rg.name
-  location              = var.location
-  kind                  = "AIServices"
-  sku_name              = "S0"
-  custom_subdomain_name = local.foundry_name
-  tags                  = local.tags
+  name                       = local.foundry_name
+  resource_group_name        = azurerm_resource_group.rg.name
+  location                   = var.location
+  kind                       = "AIServices"
+  sku_name                   = "S0"
+  custom_subdomain_name      = local.foundry_name
+  project_management_enabled = true
+  tags                       = local.tags
 
   # Entra ID 인증만 허용한다. local auth를 끄면 유출 가능한 account key가 없으므로 IP 규칙이
   # 완화되더라도 Gateway의 managed identity만 모델을 호출할 수 있다.

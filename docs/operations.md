@@ -242,8 +242,8 @@ terraform output -raw governance_workbook_portal_url
 Azure Portal에서는 **Monitor → Workbooks → LLM Gateway Governance**에서도 찾을 수 있습니다.
 Workbook은 선택한 시간 범위에 대해 다음을 한 화면에 표시합니다.
 
-- Overview: 활성 사용자, 요청, prompt/completion/total token, 예상 비용, 성공률, p95
-- Users: Top 10, 사용자별 점유율·모델·오류·p95, peak RPM/TPM, burst와 사용자 제한 사용률
+- Overview: 활성 사용자, uncached/cached input, output/total token, 예상 비용, 성공률, p95
+- Users: Top 10, 사용자별 cached input 점유율·모델·오류·p95, peak RPM/TPM, burst와 사용자 제한 사용률
 - Capacity: 모델별 TPM 한도·peak·headroom, 429/503, APIM Capacity/CPU/Memory, latency
 - Governance: 401/400/403, 미지원 모델 시도, rate limit, backend 오류, operation별 사용량
 
@@ -254,24 +254,29 @@ Workbook은 선택한 시간 범위에 대해 다음을 한 화면에 표시합�
 # infra/terraform.tfvars
 model_pricing_usd_per_million = {
   "gpt-5.6-sol" = {
-    input  = 0 # 실제 계약 input 1M-token 단가
-    output = 0 # 실제 계약 output 1M-token 단가
+    input        = 0 # 실제 계약 input 1M-token 단가
+    cached_input = 0 # 실제 계약 cached input 1M-token 단가
+    output       = 0 # 실제 계약 output 1M-token 단가
   }
   "gpt-5.6-terra" = {
-    input  = 0
-    output = 0
+    input        = 0
+    cached_input = 0
+    output       = 0
   }
   "gpt-5.6-luna" = {
-    input  = 0
-    output = 0
+    input        = 0
+    cached_input = 0
+    output       = 0
   }
   "FW-GLM-5.2" = {
-    input  = 0
-    output = 0
+    input        = 0
+    cached_input = 0
+    output       = 0
   }
   "FW-Kimi-K3" = {
-    input  = 0
-    output = 0
+    input        = 0
+    cached_input = 0
+    output       = 0
   }
 }
 ```
@@ -342,11 +347,41 @@ ApiManagementGatewayLlmLog
 | extend blind_pct = iff(total == 0, 0.0, round(100.0 * blind / total, 1))
 ```
 
-기존 classic OpenAI Gateway는 `llm-emit-token-metric`을 사용하지 않습니다. Claude Standard v2
-stack은 Anthropic token 관측을 위해 Application Insights custom metric을 별도로 사용하되,
-dimension은 API ID, operation ID, requested model로 제한합니다. 사용자 ID는 metric dimension에
-넣지 않고 `GatewayLlmLogs`와 가명 trace를 `CorrelationId`로 결합합니다. 이 metric은 preview
-제한과 누락 가능성이 있으므로 운영 추세용이며 감사 또는 과금 원장이 아닙니다.
+Classic OpenAI Gateway와 Claude Standard v2 stack은 `llm-emit-token-metric`으로 Application
+Insights custom metric을 기록합니다. Classic의 OpenAI usage에서는 `Prompt Tokens`가 cached
+input을 포함하므로 다음과 같이 해석합니다.
+
+```text
+UncachedInputTokens = Prompt Tokens - Prompt Cached Tokens
+EstimatedCost =
+  UncachedInputTokens × input 단가
+  + Prompt Cached Tokens × cached input 단가
+  + Completion Tokens × output 단가
+```
+
+`Prompt Cached Tokens`는 backend response가 cached-token 상세값을 제공할 때만 기록됩니다.
+GPT-5.6은 같은 1,024개 이상 prompt prefix와 `prompt_cache_key`를 반복 사용해 확인합니다.
+Fireworks와 xAI 모델은 provider response가 cached-token 상세값을 반환하지 않으면 0으로 남습니다.
+GPT-5.6 cache write token은 현재 APIM metric에서 별도 항목으로 제공하지 않으므로 Workbook 추정
+비용에 포함되지 않습니다.
+
+```kusto
+AppMetrics
+| where TimeGenerated > ago(1d)
+| where Name in ("Prompt Tokens", "Prompt Cached Tokens", "Completion Tokens")
+| extend Dimensions = todynamic(Properties)
+| summarize Tokens = sum(Sum)
+    by Name,
+       Model = tostring(Dimensions.Model),
+       UserHash = tostring(Dimensions["User Hash"])
+| order by Model asc, Name asc
+```
+
+이 metric은 운영 추세와 비용 추정용이며 감사 또는 과금 원장이 아닙니다. dimension당 최대 100개
+값과 namespace당 최대 1,000 active time series 제한에 도달하면 신규 시계열이 누락될 수 있습니다.
+구현과 제한은 [APIM llm-emit-token-metric 공식 문서](https://learn.microsoft.com/azure/api-management/llm-emit-token-metric-policy),
+prompt caching 조건은 [Azure OpenAI prompt caching 공식 문서](https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching)를
+확인합니다.
 
 ## 네트워크
 

@@ -148,7 +148,19 @@
       </otherwise>
     </choose>
 
-    <!-- 6. OpenAI 요청 형식 정규화
+    <!-- 6. token metric
+         OpenAI usage의 prompt/input token, cached input token과 completion/output token을
+         Application Insights custom metric으로 내보낸다. User ID는 원본 claim이 아닌
+         gateway의 SHA-256 hash이며 metric의 고유값 제한을 고려해 최대 5개 dimension만 사용한다. -->
+    <llm-emit-token-metric namespace="${token_metric_namespace}">
+      <dimension name="API ID" />
+      <dimension name="Model" value='@((string)context.Variables["requestedModel"])' />
+      <dimension name="User Hash" value='@((string)context.Variables["userId"])' />
+      <dimension name="Subscription ID" value='@(context.Subscription == null ? "none" : context.Subscription.Id)' />
+      <dimension name="Subscription Name" value='@(context.Subscription == null || string.IsNullOrWhiteSpace(context.Subscription.Name) ? "none" : context.Subscription.Name)' />
+    </llm-emit-token-metric>
+
+    <!-- 7. OpenAI 요청 형식 정규화
          Chat Completions의 max_tokens를 max_completion_tokens로 변환한다. streaming Chat 요청에는
          APIM token telemetry를 위해 include_usage를 강제하고, Responses 요청에서는 지원하지 않는
          chat 전용 stream_options를 제거한다. -->
@@ -198,7 +210,7 @@
     }</set-body>
 %{ if user_tokens_per_minute > 0 ~}
 
-    <!-- 7. 사용자·모델별 token rate limit
+    <!-- 8. 사용자·모델별 token rate limit
          예산 제한이 아니라 runaway agent의 영향 범위를 줄이는 보호 장치다. 동일 사용자가 한 모델의
          한도를 초과해도 다른 사용자와 다른 모델의 counter에는 영향을 주지 않는다.
          estimate-prompt-tokens=false이면 비 streaming 요청은 backend가 반환한 실제 usage를 사용하고,
@@ -210,7 +222,7 @@
                      retry-after-header-name="Retry-After" />
 %{ endif ~}
 
-    <!-- 8. backend 선택 및 관리 ID 인증
+    <!-- 9. backend 선택 및 관리 ID 인증
          APIM system-assigned managed identity로 backend audience에 맞는 Entra token을 발급받아
          Authorization header를 교체한다. 클라이언트의 Keycloak token은 backend로 전달하지 않는다. -->
     <set-backend-service backend-id='@((string)context.Variables["backendId"])' />
@@ -223,7 +235,7 @@
   </inbound>
 
   <backend>
-    <!-- 9. backend 요청 전달
+    <!-- 10. backend 요청 전달
          streaming 응답을 buffering하지 않아 생성된 token을 coding agent에 즉시 전달한다. -->
     <forward-request timeout="300" fail-on-error-status-code="false" buffer-response="false" />
   </backend>
