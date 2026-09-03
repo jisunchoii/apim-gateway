@@ -23,6 +23,11 @@ output "claude_gateway_base_url" {
   value       = local.claude_gateway_base_url
 }
 
+output "claude_service_gateway_base_url" {
+  description = "APIM subscription-authenticated Anthropic Messages base URL for service accounts."
+  value       = local.claude_service_base_url
+}
+
 output "claude_gateway_models" {
   description = "Current Databricks Claude Opus, Sonnet, Haiku, and Fable defaults."
   value       = var.databricks_claude_gateway.models
@@ -69,8 +74,8 @@ output "api_catalog_manifest" {
       generation             = "claude-standard-v2"
       tier                   = var.apim_sku
       location               = azurerm_resource_group.claude.location
-      oidc_base_url          = null
-      service_base_url       = null
+      oidc_base_url          = local.claude_gateway_base_url
+      service_base_url       = local.claude_service_base_url
       claude_base_url        = local.claude_gateway_base_url
       claude_model           = var.databricks_claude_gateway.models.sonnet
       claude_models          = var.databricks_claude_gateway.models

@@ -111,7 +111,9 @@ OpenAI 호환 `gateway_base_url`에는 이미 `/openai/v1`이 포함되어 있�
 | `POST` | `/chat/completions` | OpenAI Chat Completions 형식입니다. `messages` 기반 클라이언트와 OpenCode Foundry 모델에 사용합니다. |
 
 Claude Code는 별도 Korea Central Standard v2 stack의 `claude_gateway_base_url`을 사용합니다.
-기존 Classic APIM은 AOAI/Fireworks의 OpenAI 호환 API만 제공합니다.
+서비스 계정은 같은 Standard v2 APIM의 `claude_service_gateway_base_url`과 API-scoped
+subscription key를 사용합니다. 기존 Classic APIM은 AOAI/Fireworks의 OpenAI 호환 API만
+제공합니다.
 
 다음 API는 현재 제공하지 않습니다.
 
@@ -225,6 +227,28 @@ curl --no-buffer --silent --show-error \
   --header "Content-Type: application/json" \
   --data '{"model":"system.ai.claude-sonnet-5","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}'
 ```
+
+Claude 서비스 계정은 Keycloak token 대신 `Service Claude Gateway` API 범위로 발급한
+subscription key를 사용합니다.
+
+```bash
+export CLAUDE_SERVICE_GATEWAY_BASE_URL="$(
+  terraform -chdir=infra/environments/claude-standard-v2 \
+    output -raw claude_service_gateway_base_url
+)"
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+
+curl --silent --show-error --fail-with-body \
+  --request POST \
+  --url "$CLAUDE_SERVICE_GATEWAY_BASE_URL/v1/messages" \
+  --header "Ocp-Apim-Subscription-Key: $LLMGW_SUBSCRIPTION_KEY" \
+  --header "anthropic-version: 2023-06-01" \
+  --header "Content-Type: application/json" \
+  --data '{"model":"system.ai.claude-sonnet-5","max_tokens":64,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}'
+```
+
+서비스마다 subscription을 하나씩 발급하고 공유하지 않습니다. raw subscription key는
+Application Insights와 Log Analytics에 기록하지 않습니다.
 
 `apiKeyHelper` 결과는 Claude Code가 `Authorization`과 `x-api-key`에 함께 넣지만 APIM은
 Authorization의 Keycloak JWT만 검증하고 `x-api-key`는 backend 전달 전에 제거합니다.

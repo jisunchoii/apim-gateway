@@ -27,6 +27,7 @@ locals {
 
   apim_name                 = "apim-${local.name_suffix}-${random_string.suffix.result}"
   claude_api_name           = "claude-gateway"
+  claude_service_api_name   = "service-claude-gateway"
   claude_backend_id         = "databricks-claude"
   application_insights_name = "appi-${local.name_suffix}"
   log_analytics_name        = "log-${local.name_suffix}"
@@ -37,7 +38,9 @@ locals {
   databricks_token_audience = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
   claude_model_prefixes     = ["system.ai.claude-opus-", "system.ai.claude-sonnet-", "system.ai.claude-haiku-", "system.ai.claude-fable-"]
   claude_model_prefixes_xml = join(", ", [for prefix in local.claude_model_prefixes : "&quot;${prefix}&quot;"])
-  claude_gateway_base_url   = "${try(azapi_resource.apim.output.properties.gatewayUrl, "https://${local.apim_name}.azure-api.net")}/anthropic"
+  apim_gateway_url          = try(azapi_resource.apim.output.properties.gatewayUrl, "https://${local.apim_name}.azure-api.net")
+  claude_gateway_base_url   = "${local.apim_gateway_url}/anthropic"
+  claude_service_base_url   = "${local.apim_gateway_url}/service/anthropic"
   app_insights_logger_name  = "applicationinsights"
   azure_monitor_logger_name = "azuremonitor"
 }

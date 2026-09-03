@@ -145,6 +145,7 @@ apply는 plan 승인 후 실행합니다.
 ```bash
 terraform -chdir=infra/environments/claude-standard-v2 output -raw apim_name
 terraform -chdir=infra/environments/claude-standard-v2 output -raw claude_gateway_base_url
+terraform -chdir=infra/environments/claude-standard-v2 output -raw claude_service_gateway_base_url
 terraform -chdir=infra/environments/claude-standard-v2 output -raw nat_gateway_public_ip
 terraform -chdir=infra/environments/claude-standard-v2 output -raw apim_managed_identity_principal_id
 terraform -chdir=infra/environments/claude-standard-v2 output -raw log_analytics_workspace_id
@@ -166,27 +167,70 @@ Service Principal, workspace assignment, model `EXECUTE`와 network allowlist를
 
 ## 7. 기능 검증
 
-기존 Keycloak Device Flow helper로 access token을 발급한 뒤 API를 확인합니다.
+README의 Claude Code 설정과 동일한 OIDC discovery URL, client ID, scope를 사용합니다.
+저장소와 local Terraform state가 있는 Linux 환경에서는 다음과 같이 사용자 API를 확인합니다.
+Terraform state가 없는 사용자 PC에서는 `CLAUDE_GATEWAY_BASE_URL`을 운영자가 안내한 URL로
+직접 설정합니다.
 
 ```bash
-token="$(node ./scripts/keycloak/keycloak-token.js)"
-base_url="$(
+cd /home/<linux-user>/src/apim-gateway
+
+export CLAUDE_GATEWAY_BASE_URL="$(
   terraform -chdir=infra/environments/claude-standard-v2 \
     output -raw claude_gateway_base_url
 )"
+export LLMGW_OIDC_DISCOVERY_URL="https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
+export LLMGW_OIDC_CLIENT_ID="llm-gateway-cli"
+export LLMGW_OIDC_SCOPE="openid llm-gateway"
+
+token="$(node ./scripts/keycloak/keycloak-token.js --open-browser)"
 
 curl --silent --show-error --fail-with-body \
   --request POST \
-  --url "$base_url/v1/messages" \
+  --url "$CLAUDE_GATEWAY_BASE_URL/v1/messages" \
   --header "Authorization: Bearer $token" \
   --header "Content-Type: application/json" \
   --header "anthropic-version: 2023-06-01" \
   --data '{"model":"system.ai.claude-sonnet-5","max_tokens":32,"messages":[{"role":"user","content":"Reply only with CLAUDE_OK"}]}'
 ```
 
+SSE streaming도 같은 token과 URL을 사용해 확인합니다.
+
+```bash
+curl --no-buffer --silent --show-error --fail-with-body \
+  --request POST \
+  --url "$CLAUDE_GATEWAY_BASE_URL/v1/messages" \
+  --header "Authorization: Bearer $token" \
+  --header "Content-Type: application/json" \
+  --header "anthropic-version: 2023-06-01" \
+  --data '{"model":"system.ai.claude-sonnet-5","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Reply only with CLAUDE_STREAM_OK"}]}'
+```
+
+서비스 계정 API는 Keycloak token 대신 `Service Claude Gateway` API 범위로 발급한 APIM
+subscription key를 사용합니다. 사용자별 subscription이나 전체 APIM 범위의 key를 재사용하지
+않습니다.
+
+```bash
+export CLAUDE_SERVICE_GATEWAY_BASE_URL="$(
+  terraform -chdir=infra/environments/claude-standard-v2 \
+    output -raw claude_service_gateway_base_url
+)"
+export LLMGW_SUBSCRIPTION_KEY="<service-account-subscription-key>"
+
+curl --silent --show-error --fail-with-body \
+  --request POST \
+  --url "$CLAUDE_SERVICE_GATEWAY_BASE_URL/v1/messages" \
+  --header "Ocp-Apim-Subscription-Key: $LLMGW_SUBSCRIPTION_KEY" \
+  --header "Content-Type: application/json" \
+  --header "anthropic-version: 2023-06-01" \
+  --data '{"model":"system.ai.claude-sonnet-5","max_tokens":32,"messages":[{"role":"user","content":"Reply only with CLAUDE_SERVICE_OK"}]}'
+```
+
 다음을 모두 확인합니다.
 
 - token 없음/잘못된 token은 `401`
+- `/service/anthropic/v1/messages`는 API-scoped APIM subscription key가 없으면 `401`
+- 유효한 service API subscription key를 보내면 `/service/anthropic/v1/messages`가 `200`
 - 허용되지 않은 model family는 `403`
 - Opus, Sonnet, Haiku, Fable 요청은 각각 `200`
 - streaming 요청은 `text/event-stream`과 Anthropic event를 중단 없이 반환
@@ -221,9 +265,9 @@ Application Insights에는 `llm-emit-token-metric`이 다음 dimension으로 기
 - APIM subscription ID
 - APIM subscription name
 
-raw JWT subject와 subscription key 값은 기록하지 않습니다. Claude API는 Keycloak 인증을
-유지하며 APIM subscription을 필수로 변경하지 않으므로, subscription key 없이 호출한 요청은
-Workbook에서 `SubscriptionId=none`으로 표시됩니다.
+raw JWT subject와 subscription key 값은 기록하지 않습니다. 사용자 API는 Keycloak 인증을
+유지하며 Workbook에서 `SubscriptionId=none`으로 표시됩니다. 서비스 API 요청은
+`service-claude-gateway` API-scoped subscription ID와 이름으로 집계됩니다.
 
 cached input은 `AppMetrics`의 `Prompt Cached Tokens`에서 확인합니다.
 

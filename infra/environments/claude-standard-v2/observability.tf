@@ -94,6 +94,30 @@ resource "azapi_resource" "azure_monitor_diagnostic" {
   depends_on = [azurerm_monitor_diagnostic_setting.apim]
 }
 
+resource "azapi_resource" "service_azure_monitor_diagnostic" {
+  type      = "Microsoft.ApiManagement/service/apis/diagnostics@2025-09-01-preview"
+  name      = local.azure_monitor_logger_name
+  parent_id = azurerm_api_management_api.claude_service.id
+
+  body = {
+    properties = {
+      loggerId    = azapi_update_resource.azure_monitor_logger.id
+      alwaysLog   = "allErrors"
+      logClientIp = false
+      verbosity   = "information"
+      sampling = {
+        samplingType = "fixed"
+        percentage   = 100
+      }
+      largeLanguageModel = {
+        logs = "enabled"
+      }
+    }
+  }
+
+  depends_on = [azurerm_monitor_diagnostic_setting.apim]
+}
+
 resource "azurerm_api_management_logger" "application_insights" {
   name                = local.app_insights_logger_name
   api_management_name = azapi_resource.apim.name
@@ -117,6 +141,56 @@ resource "azapi_resource" "application_insights_diagnostic" {
   type      = "Microsoft.ApiManagement/service/apis/diagnostics@2025-09-01-preview"
   name      = local.app_insights_logger_name
   parent_id = azurerm_api_management_api.claude.id
+
+  body = {
+    properties = {
+      loggerId                = azurerm_api_management_logger.application_insights.id
+      alwaysLog               = "allErrors"
+      httpCorrelationProtocol = "W3C"
+      logClientIp             = false
+      metrics                 = true
+      operationNameFormat     = "Name"
+      verbosity               = "information"
+      sampling = {
+        samplingType = "fixed"
+        percentage   = 100
+      }
+      frontend = {
+        request = {
+          body = {
+            bytes = 0
+          }
+          headers = []
+        }
+        response = {
+          body = {
+            bytes = 0
+          }
+          headers = []
+        }
+      }
+      backend = {
+        request = {
+          body = {
+            bytes = 0
+          }
+          headers = []
+        }
+        response = {
+          body = {
+            bytes = 0
+          }
+          headers = []
+        }
+      }
+    }
+  }
+}
+
+resource "azapi_resource" "service_application_insights_diagnostic" {
+  type      = "Microsoft.ApiManagement/service/apis/diagnostics@2025-09-01-preview"
+  name      = local.app_insights_logger_name
+  parent_id = azurerm_api_management_api.claude_service.id
 
   body = {
     properties = {
@@ -202,7 +276,8 @@ locals {
     let Gateway = materialize(
         ApiManagementGatewayLogs
         | where TimeGenerated {TimeRange}
-        | where ApiId == "${local.claude_api_name}" and OperationId == "claude-messages"
+        | where ApiId in ("${local.claude_api_name}", "${local.claude_service_api_name}")
+            and OperationId == "claude-messages"
         | summarize arg_max(TimeGenerated, *) by CorrelationId
         | project
             RequestTime = TimeGenerated,
@@ -747,7 +822,7 @@ locals {
 
             * `Prompt Cached Tokens`는 Databricks response의 `cache_read_input_tokens`에 해당하며 cached input 단가로 계산합니다.
             * 현재 APIM preview metric은 `cache_creation_input_tokens`를 별도 cache-write metric으로 내보내지 않으므로 추정 DBU/USD에는 cache write 비용이 포함되지 않습니다.
-            * Keycloak-only 요청은 APIM subscription이 없으므로 `SubscriptionId=none`으로 집계됩니다. 유효한 APIM subscription이 연결된 요청만 subscription별로 분리됩니다.
+            * 사용자 API 요청은 APIM subscription이 없으므로 `SubscriptionId=none`으로 집계됩니다. 서비스 API 요청은 API-scoped subscription ID와 이름으로 분리됩니다.
             * raw subscription key, JWT subject, prompt와 completion 본문은 저장하지 않습니다.
             * APIM custom metric은 dimension당 최대 100개 값과 namespace당 최대 1,000 active time series 제한이 있어 사용자 수가 커지면 별도 telemetry pipeline이 필요합니다.
             * 스트리밍 요청이 중간 취소되면 usage와 token metric이 누락되거나 부정확할 수 있습니다.

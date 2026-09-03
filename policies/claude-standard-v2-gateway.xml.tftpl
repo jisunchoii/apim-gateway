@@ -4,6 +4,8 @@
     <set-header name="api-key" exists-action="delete" />
     <set-header name="x-api-key" exists-action="delete" />
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-query-parameter name="subscription-key" exists-action="delete" />
+%{ if authentication_mode == "oidc" ~}
     <validate-jwt header-name="Authorization"
                   failed-validation-httpcode="401"
                   failed-validation-error-message="Unauthorized"
@@ -26,6 +28,8 @@
         </claim>
       </required-claims>
     </validate-jwt>
+%{ endif ~}
+%{ if authentication_mode == "oidc" ~}
     <set-variable name="accessToken" value="@{
       var authorization = context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;);
       return authorization.StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase)
@@ -56,6 +60,25 @@
         ? &quot;unknown&quot;
         : jwt.Claims.GetValueOrDefault(&quot;${oidc_user_label_claim}&quot;, jwt.Subject);
     }" />
+%{ else ~}
+    <set-variable name="gatewayUserId" value="@{
+      var subscriptionId = context.Subscription == null ? &quot;unknown&quot; : context.Subscription.Id;
+      return &quot;apim-subscription:&quot; + subscriptionId;
+    }" />
+    <set-variable name="gatewayUserHash" value="@{
+      var userId = (string)context.Variables[&quot;gatewayUserId&quot;];
+      var bytes = Encoding.UTF8.GetBytes(userId);
+      using (var algorithm = SHA256.Create())
+      {
+        return BitConverter.ToString(algorithm.ComputeHash(bytes)).Replace(&quot;-&quot;, &quot;&quot;).ToLowerInvariant();
+      }
+    }" />
+    <set-variable name="gatewayUserLabel" value="@{
+      return context.Subscription == null || string.IsNullOrWhiteSpace(context.Subscription.Name)
+        ? ((string)context.Variables[&quot;gatewayUserHash&quot;]).Substring(0, 12)
+        : context.Subscription.Name;
+    }" />
+%{ endif ~}
     <choose>
       <when condition="@(context.Request.Method != &quot;POST&quot; || context.Request.Body == null)">
         <return-response>
