@@ -1,4 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "llmgw-claude/system.ai.claude-sonnet-5",
+  "small_model": "llmgw-claude/system.ai.claude-haiku-4-5",
   "plugin": ["./scripts/keycloak/opencode-keycloak-hook.js"]
 }

@@ -260,19 +260,27 @@ Authorization의 Keycloak JWT만 검증하고 `x-api-key`는 backend 전달 전�
 
 ### OpenCode
 
-#### 사용자 OIDC
+Claude Standard v2 Gateway를 Anthropic provider로 연결하려면
+[OpenCode Claude Gateway 연결 가이드](docs/opencode-claude-gateway.md)를 사용합니다. 사용자
+OIDC와 서비스 계정 subscription key 구성을 모두 설명합니다.
 
-`opencode.json`은 `scripts/keycloak/opencode-keycloak-hook.js`를 로드합니다. Hook은 최초에만
-Device Flow로 로그인하고 access/refresh token을 사용자 프로필의 `~/.llmgw/keycloak-token.json`에
-저장한 뒤 만료 전에 자동 갱신합니다. 캐시 경로는 `LLMGW_OIDC_CACHE_PATH`로 변경할 수 있습니다.
-로그인이 필요하면 기본 브라우저에서 verification URL을 자동으로 열며, 터미널에도 URL과 user
-code를 계속 표시합니다. 브라우저 자동 실행이 불가능한 환경에서는
-`LLMGW_OIDC_OPEN_BROWSER=false`로 비활성화할 수 있습니다.
-모델 목록과 기본 모델은 main Terraform의 `opencode_model_config` output에서 읽으므로
-`routed_models`와 별도로 하드코딩하지 않습니다.
+#### 사용자 OIDC (OpenAI 호환 + Claude)
+
+`opencode.json`은 Claude Sonnet을 기본 모델, Claude Haiku를 small model로 설정하고
+`scripts/keycloak/opencode-keycloak-hook.js`를 로드합니다. Hook은 최초에만 Device Flow로
+로그인하고 access/refresh token을 사용자 프로필의 `~/.llmgw/keycloak-token.json`에 저장한 뒤
+만료 전에 자동 갱신합니다. 캐시 경로는 `LLMGW_OIDC_CACHE_PATH`로 변경할 수 있습니다. 로그인이
+필요하면 기본 브라우저에서 verification URL을 자동으로 열며, 터미널에도 URL과 user code를 계속
+표시합니다. 브라우저 자동 실행이 불가능한 환경에서는 `LLMGW_OIDC_OPEN_BROWSER=false`로
+비활성화할 수 있습니다.
+
+OpenAI 호환 모델은 main Terraform의 `opencode_model_config`, Claude 모델은 Claude Standard v2
+Terraform의 `claude_gateway_models` output에서 읽습니다. Hook은 `llmgw-claude` Anthropic
+provider의 base URL도 `claude_gateway_base_url`에서 자동 구성합니다.
 
 ```bash
 export LLMGW_BASE_URL="https://<apim-name>.azure-api.net/openai/v1"
+export LLMGW_CLAUDE_BASE_URL="https://<claude-standard-v2-apim>.azure-api.net/anthropic"
 export LLMGW_OIDC_DISCOVERY_URL="https://<keycloak-host>/realms/<realm>/.well-known/openid-configuration"
 export LLMGW_OIDC_CLIENT_ID="llm-gateway-cli"
 export LLMGW_OIDC_SCOPE="openid llm-gateway"
@@ -288,6 +296,9 @@ export LLMGW_OPENCODE_RESPONSES_MODELS="gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna"
 export LLMGW_OPENCODE_CHAT_MODELS="FW-GLM-5.2,FW-Kimi-K3"
 export LLMGW_OPENCODE_DEFAULT_MODEL="gpt-5.6-sol"
 export LLMGW_OPENCODE_SMALL_MODEL="gpt-5.6-luna"
+export LLMGW_OPENCODE_CLAUDE_MODELS="system.ai.claude-opus-5,system.ai.claude-sonnet-5,system.ai.claude-haiku-4-5,system.ai.claude-fable-5"
+export LLMGW_OPENCODE_CLAUDE_DEFAULT_MODEL="system.ai.claude-sonnet-5"
+export LLMGW_OPENCODE_CLAUDE_SMALL_MODEL="system.ai.claude-haiku-4-5"
 ```
 
 단발성 호출은 `openai/<model>` 또는 `foundry/<model>` 형식을 사용합니다. provider는 모델을
@@ -302,12 +313,13 @@ low text verbosity, encrypted reasoning content와 Responses server-side state �
 ```bash
 opencode run --model openai/gpt-5.6-sol "Reply with exactly: OK"
 opencode run --model foundry/FW-GLM-5.2 "Reply with exactly: OK"
+opencode run --model llmgw-claude/system.ai.claude-sonnet-5 "Reply with exactly: OK"
 ```
 
 Responses stream과 호환되지 않는 모델은 `opencode_api = "chat"`으로 설정합니다. GPT 계열을
 Chat으로 호출하도록 설정한 경우 Hook은 지원되지 않는 Responses 전용 reasoning 옵션을 제거합니다.
 
-#### 서비스 계정
+#### OpenAI 호환 Gateway 서비스 계정
 
 서비스 계정은 Keycloak hook을 사용하지 않습니다. 고객 프로젝트의 `opencode.json`에 서비스용
 provider를 직접 설정하고, 운영자가 안내한 Responses 모델과 Chat 모델만 등록합니다.
@@ -502,6 +514,7 @@ Terraform 배포, 모델 관리, Workbook과 로그 쿼리는
 
 ## 관련 문서
 
+- [OpenCode Claude Gateway 연결 가이드](docs/opencode-claude-gateway.md)
 - [Korea Central Claude Standard v2 APIM 구축 가이드](docs/claude-standard-v2-deployment.md)
 - [Azure Databricks Claude 고객 설정 가이드](docs/databricks-claude-apim-guide.md)
 - [Keycloak Device Authorization Grant](https://www.keycloak.org/docs/latest/server_admin/#_oid4vc_device_authorization_grant)

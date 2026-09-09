@@ -13,13 +13,15 @@ import { dirname, resolve } from "node:path"
 import { createDeviceFlowLogger } from "./device-flow-logger.js"
 import { createKeycloakDeviceCredential } from "./keycloak-device-auth.js"
 import {
+  readClaudeTerraformOutput,
+  readClaudeTerraformStringOutput,
   readOpenCodeModelConfig,
   readTerraformStringOutput,
 } from "./terraform-settings.js"
 
 const responsesProviderId = "openai"
 const projectProviderId = "foundry"
-const gatewayProviderIds = new Set([responsesProviderId, projectProviderId])
+const claudeProviderId = "llmgw-claude"
 
 const mergeModelDefinition = (defaults, configured = {}) => {
   const definition = {
@@ -53,6 +55,18 @@ const responsesModelDefinition = (model) => ({
     include: ["reasoning.encrypted_content"],
   },
 })
+
+const claudeModelDefinition = (model) => ({
+  name: model,
+  tool_call: true,
+})
+
+const normalizeBaseURL = (value) => value.replace(/\/+$/, "")
+
+const toClaudeApiBaseURL = (value) => {
+  const normalized = normalizeBaseURL(value)
+  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
+}
 
 const hardenTokenFile = async (path) => {
   if (process.platform === "win32") {
@@ -118,6 +132,11 @@ export const KeycloakGateway = async () => {
   const responsesModelsOverride =
     process.env.LLMGW_OPENCODE_RESPONSES_MODELS
   const chatModelsOverride = process.env.LLMGW_OPENCODE_CHAT_MODELS
+  const hasExplicitMainConfiguration = [
+    process.env.LLMGW_BASE_URL,
+    responsesModelsOverride,
+    chatModelsOverride,
+  ].some((value) => value !== undefined)
   let modelConfig
 
   if (
@@ -140,10 +159,18 @@ export const KeycloakGateway = async () => {
     try {
       modelConfig = readOpenCodeModelConfig()
     } catch (error) {
-      throw new Error(
-        "OpenCode model configuration is unavailable. Initialize the main infra state or set LLMGW_OPENCODE_RESPONSES_MODELS and LLMGW_OPENCODE_CHAT_MODELS.",
-        { cause: error },
-      )
+      if (hasExplicitMainConfiguration) {
+        throw new Error(
+          "OpenCode model configuration is unavailable. Initialize the main infra state or set LLMGW_OPENCODE_RESPONSES_MODELS and LLMGW_OPENCODE_CHAT_MODELS.",
+          { cause: error },
+        )
+      }
+      modelConfig = {
+        responses_models: [],
+        chat_models: [],
+        default_model: null,
+        small_model: null,
+      }
     }
   }
 
@@ -160,16 +187,69 @@ export const KeycloakGateway = async () => {
       `OpenCode models cannot use both providers: ${duplicatedModels.join(", ")}`,
     )
   }
-  if (responsesModels.length + projectModels.length === 0) {
-    throw new Error("OpenCode has no routed models.")
+  const claudeModelsOverride =
+    process.env.LLMGW_OPENCODE_CLAUDE_MODELS
+  const hasExplicitClaudeConfiguration = [
+    process.env.LLMGW_CLAUDE_BASE_URL,
+    claudeModelsOverride,
+    process.env.LLMGW_OPENCODE_CLAUDE_DEFAULT_MODEL,
+    process.env.LLMGW_OPENCODE_CLAUDE_SMALL_MODEL,
+  ].some((value) => value !== undefined)
+  let claudeConfig = null
+
+  try {
+    const modelsByAlias =
+      claudeModelsOverride === undefined
+        ? readClaudeTerraformOutput("claude_gateway_models")
+        : null
+    const claudeModels =
+      claudeModelsOverride === undefined
+        ? [
+            ...new Set(
+              Object.values(modelsByAlias ?? {})
+                .map((model) => String(model).trim())
+                .filter((model) => model),
+            ),
+          ].sort()
+        : parseModelList(
+            "LLMGW_OPENCODE_CLAUDE_MODELS",
+            claudeModelsOverride,
+          ).sort()
+
+    if (claudeModels.length === 0) {
+      throw new Error("Claude Gateway has no routed models.")
+    }
+
+    const configuredBaseURL =
+      process.env.LLMGW_CLAUDE_BASE_URL?.trim() ||
+      readClaudeTerraformStringOutput("claude_gateway_base_url")
+    claudeConfig = {
+      baseURL: toClaudeApiBaseURL(configuredBaseURL),
+      models: claudeModels,
+      default_model:
+        process.env.LLMGW_OPENCODE_CLAUDE_DEFAULT_MODEL?.trim() ||
+        modelsByAlias?.sonnet ||
+        claudeModels[0],
+      small_model:
+        process.env.LLMGW_OPENCODE_CLAUDE_SMALL_MODEL?.trim() ||
+        modelsByAlias?.haiku ||
+        claudeModels[0],
+    }
+  } catch (error) {
+    if (hasExplicitClaudeConfiguration) {
+      throw new Error(
+        "Claude OpenCode configuration is unavailable. Initialize the Claude Standard v2 infra state or set LLMGW_CLAUDE_BASE_URL and LLMGW_OPENCODE_CLAUDE_MODELS.",
+        { cause: error },
+      )
+    }
   }
 
-  const defaultModel =
-    process.env.LLMGW_OPENCODE_DEFAULT_MODEL?.trim() ||
-    modelConfig.default_model
-  const smallModel =
-    process.env.LLMGW_OPENCODE_SMALL_MODEL?.trim() ||
-    modelConfig.small_model
+  const claudeModels = claudeConfig?.models ?? []
+  const routedModelCount =
+    responsesModels.length + projectModels.length + claudeModels.length
+  if (routedModelCount === 0) {
+    throw new Error("OpenCode has no routed models.")
+  }
   const modelReferences = new Map([
     ...responsesModels.map((model) => [
       model,
@@ -179,6 +259,10 @@ export const KeycloakGateway = async () => {
       model,
       `${projectProviderId}/${model}`,
     ]),
+    ...claudeModels.map((model) => [
+      model,
+      `${claudeProviderId}/${model}`,
+    ]),
   ])
   const routedReferences = [...modelReferences.values()]
   const qualifyModel = (model) => {
@@ -186,12 +270,28 @@ export const KeycloakGateway = async () => {
     if (modelReferences.has(model)) return modelReferences.get(model)
     return routedReferences.includes(model) ? model : ""
   }
-  const selectModel = (preferred, configured, fallback) => {
-    const preferredReference = qualifyModel(preferred)
-    if (preferred && !preferredReference) {
-      throw new Error(`OpenCode model is not routed: ${preferred}`)
+  const selectModel = (override, configured, defaults, fallback) => {
+    const overrideReference = qualifyModel(override)
+    if (override && !overrideReference) {
+      throw new Error(`OpenCode model is not routed: ${override}`)
     }
-    return preferredReference || qualifyModel(configured) || fallback
+    const configuredReference = qualifyModel(configured)
+    if (
+      configured &&
+      !configuredReference &&
+      [responsesProviderId, projectProviderId, claudeProviderId].some(
+        (providerId) => configured.startsWith(`${providerId}/`),
+      )
+    ) {
+      throw new Error(`OpenCode model is not routed: ${configured}`)
+    }
+
+    return (
+      overrideReference ||
+      configuredReference ||
+      defaults.map(qualifyModel).find((model) => model) ||
+      fallback
+    )
   }
   const toModelDefinitions = (
     models,
@@ -205,9 +305,23 @@ export const KeycloakGateway = async () => {
       ]),
     )
 
-  const baseURL = (
-    await readSetting("LLMGW_BASE_URL", "gateway_base_url")
-  ).replace(/\/+$/, "")
+  const baseURL =
+    responsesModels.length + projectModels.length > 0
+      ? normalizeBaseURL(
+          await readSetting("LLMGW_BASE_URL", "gateway_base_url"),
+        )
+      : null
+  const providerBaseURLs = new Map([
+    ...(baseURL
+      ? [
+          [responsesProviderId, baseURL],
+          [projectProviderId, baseURL],
+        ]
+      : []),
+    ...(claudeConfig
+      ? [[claudeProviderId, claudeConfig.baseURL]]
+      : []),
+  ])
   const discoveryUrl = await readSetting(
     "LLMGW_OIDC_DISCOVERY_URL",
     "oidc_openid_config_url",
@@ -276,56 +390,90 @@ export const KeycloakGateway = async () => {
         config.provider?.[responsesProviderId] ?? {}
       const currentProjectProvider =
         config.provider?.[projectProviderId] ?? {}
+      const currentClaudeProvider =
+        config.provider?.[claudeProviderId] ?? {}
       config.provider = {
         ...config.provider,
-        [responsesProviderId]: {
-          ...currentResponsesProvider,
-          npm: "@ai-sdk/openai",
-          name: "LLM Gateway",
-          whitelist: responsesModels,
-          options: {
-            ...currentResponsesProvider.options,
-            baseURL,
-            apiKey: "managed-by-keycloak-hook",
-            timeout: 300000,
-          },
-          models: {
-            ...currentResponsesProvider.models,
-            ...toModelDefinitions(
-              responsesModels,
-              currentResponsesProvider.models,
-              responsesModelDefinition,
-            ),
-          },
-        },
-        [projectProviderId]: {
-          ...currentProjectProvider,
-          npm: "@ai-sdk/openai-compatible",
-          name: "LLM Gateway Foundry Models",
-          whitelist: projectModels,
-          options: {
-            ...currentProjectProvider.options,
-            baseURL,
-            apiKey: "managed-by-keycloak-hook",
-            timeout: 300000,
-          },
-          models: {
-            ...currentProjectProvider.models,
-            ...toModelDefinitions(
-              projectModels,
-              currentProjectProvider.models,
-            ),
-          },
-        },
+        ...(baseURL
+          ? {
+              [responsesProviderId]: {
+                ...currentResponsesProvider,
+                npm: "@ai-sdk/openai",
+                name: "LLM Gateway",
+                whitelist: responsesModels,
+                options: {
+                  ...currentResponsesProvider.options,
+                  baseURL,
+                  apiKey: "managed-by-keycloak-hook",
+                  timeout: 300000,
+                },
+                models: {
+                  ...currentResponsesProvider.models,
+                  ...toModelDefinitions(
+                    responsesModels,
+                    currentResponsesProvider.models,
+                    responsesModelDefinition,
+                  ),
+                },
+              },
+              [projectProviderId]: {
+                ...currentProjectProvider,
+                npm: "@ai-sdk/openai-compatible",
+                name: "LLM Gateway Foundry Models",
+                whitelist: projectModels,
+                options: {
+                  ...currentProjectProvider.options,
+                  baseURL,
+                  apiKey: "managed-by-keycloak-hook",
+                  timeout: 300000,
+                },
+                models: {
+                  ...currentProjectProvider.models,
+                  ...toModelDefinitions(
+                    projectModels,
+                    currentProjectProvider.models,
+                  ),
+                },
+              },
+            }
+          : {}),
+        ...(claudeConfig
+          ? {
+              [claudeProviderId]: {
+                ...currentClaudeProvider,
+                npm: "@ai-sdk/anthropic",
+                name: "LLM Gateway Claude",
+                whitelist: claudeModels,
+                options: {
+                  ...currentClaudeProvider.options,
+                  baseURL: claudeConfig.baseURL,
+                  apiKey: "managed-by-keycloak-hook",
+                  timeout: 300000,
+                },
+                models: {
+                  ...currentClaudeProvider.models,
+                  ...toModelDefinitions(
+                    claudeModels,
+                    currentClaudeProvider.models,
+                    claudeModelDefinition,
+                  ),
+                },
+              },
+            }
+          : {}),
       }
       config.model = selectModel(
-        defaultModel,
+        process.env.LLMGW_OPENCODE_DEFAULT_MODEL?.trim() ||
+          process.env.LLMGW_OPENCODE_CLAUDE_DEFAULT_MODEL?.trim(),
         config.model,
+        [modelConfig.default_model, claudeConfig?.default_model],
         routedReferences[0],
       )
       config.small_model = selectModel(
-        smallModel,
+        process.env.LLMGW_OPENCODE_SMALL_MODEL?.trim() ||
+          process.env.LLMGW_OPENCODE_CLAUDE_SMALL_MODEL?.trim(),
         config.small_model,
+        [modelConfig.small_model, claudeConfig?.small_model],
         routedReferences[1] ?? routedReferences[0],
       )
     },
@@ -346,10 +494,11 @@ export const KeycloakGateway = async () => {
     "chat.headers": async (input, output) => {
       const requestBaseURL = String(
         input.provider.options.baseURL ?? "",
-      ).replace(/\/+$/, "")
+      )
+      const expectedBaseURL = providerBaseURLs.get(input.model.providerID)
       if (
-        !gatewayProviderIds.has(input.model.providerID) ||
-        requestBaseURL !== baseURL
+        !expectedBaseURL ||
+        normalizeBaseURL(requestBaseURL) !== expectedBaseURL
       ) {
         return
       }

@@ -5,18 +5,23 @@ import { fileURLToPath } from "node:url"
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 export const gatewayInfraDirectory = resolve(projectRoot, "infra")
+export const claudeGatewayInfraDirectory = resolve(
+  gatewayInfraDirectory,
+  "environments",
+  "claude-standard-v2",
+)
 
-const statePath = resolve(gatewayInfraDirectory, "terraform.tfstate")
 const tfvarsPath = resolve(gatewayInfraDirectory, "terraform.tfvars")
 
-const readLocalState = () => JSON.parse(readFileSync(statePath, "utf8"))
+const readLocalState = (directory) =>
+  JSON.parse(readFileSync(resolve(directory, "terraform.tfstate"), "utf8"))
 
-export const readTerraformOutput = (name) => {
+const readTerraformOutputFromDirectory = (directory, name) => {
   try {
     return JSON.parse(
       execFileSync(
         "terraform",
-        [`-chdir=${gatewayInfraDirectory}`, "output", "-json", name],
+        [`-chdir=${directory}`, "output", "-json", name],
         {
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
@@ -25,7 +30,7 @@ export const readTerraformOutput = (name) => {
     )
   } catch (terraformError) {
     try {
-      const output = readLocalState().outputs?.[name]
+      const output = readLocalState(directory).outputs?.[name]
       if (output) return output.value
     } catch {
       // Report the Terraform failure below when no local migration state exists.
@@ -37,13 +42,25 @@ export const readTerraformOutput = (name) => {
   }
 }
 
-export const readTerraformStringOutput = (name) => {
-  const value = readTerraformOutput(name)
+const readTerraformStringOutputFromDirectory = (directory, name) => {
+  const value = readTerraformOutputFromDirectory(directory, name)
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`Terraform output is not a non-empty string: ${name}`)
   }
   return value.trim()
 }
+
+export const readTerraformOutput = (name) =>
+  readTerraformOutputFromDirectory(gatewayInfraDirectory, name)
+
+export const readTerraformStringOutput = (name) =>
+  readTerraformStringOutputFromDirectory(gatewayInfraDirectory, name)
+
+export const readClaudeTerraformOutput = (name) =>
+  readTerraformOutputFromDirectory(claudeGatewayInfraDirectory, name)
+
+export const readClaudeTerraformStringOutput = (name) =>
+  readTerraformStringOutputFromDirectory(claudeGatewayInfraDirectory, name)
 
 const readTfvarsString = (name) => {
   try {
@@ -64,7 +81,7 @@ export const readOpenCodeModelConfig = () => {
   try {
     return readTerraformOutput("opencode_model_config")
   } catch {
-    const state = readLocalState()
+    const state = readLocalState(gatewayInfraDirectory)
     const routedModels = state.outputs?.routed_models?.value
     if (!Array.isArray(routedModels) || routedModels.length === 0) {
       throw new Error("Terraform state does not contain routed_models.")
