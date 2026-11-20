@@ -14,13 +14,13 @@ output "apim_public_ip_addresses" {
 }
 
 output "foundry_account_name" {
-  description = "Gateway-owned AIServices account name, or null when only existing project models are connected."
+  description = "Managed AIServices account name in the gateway region, or null when that account is not managed."
   value       = try(azurerm_cognitive_account.foundry["gateway"].name, null)
 }
 
 output "managed_foundry_account_enabled" {
-  description = "Whether this stack currently creates a gateway-owned Foundry account."
-  value       = local.managed_foundry_account_enabled
+  description = "Whether this stack currently manages any Foundry accounts."
+  value       = length(local.managed_foundry_accounts) > 0
 }
 
 output "log_analytics_workspace_id" {

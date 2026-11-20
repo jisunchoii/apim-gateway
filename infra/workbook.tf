@@ -12,7 +12,7 @@ locals {
 
   governance_capacity_rows = join(",\n", [
     for model_name in local.routed_models :
-    "  ${jsonencode(model_name)}, ${jsonencode(local.model_capacity_tpm[model_name])}"
+    "  ${jsonencode(model_name)}, ${jsonencode(try(local.model_locations[model_name], "unconfigured"))}, ${jsonencode(try(lower(split("/", local.model_targets[model_name].backend_url)[2]), ""))}, ${jsonencode(try(local.model_capacity_tpm[model_name], 0))}"
   ])
 
   governance_pricing_summary = join(" · ", [
@@ -24,7 +24,7 @@ locals {
     let ModelPrices = datatable(Model:string, InputUsdPerMillion:real, CachedInputUsdPerMillion:real, OutputUsdPerMillion:real) [
     ${local.governance_price_rows}
     ];
-    let ModelLimits = datatable(Model:string, TpmLimit:long) [
+    let ModelLimits = datatable(Model:string, ConfiguredRegion:string, ConfiguredBackendHost:string, TpmLimit:long) [
     ${local.governance_capacity_rows}
     ];
     let GatewayAll = materialize(
@@ -42,12 +42,14 @@ locals {
             UserLabel
           )
         | extend RequestedModel = tostring(GovernanceTrace.metadata.requestedModel)
+        | extend BackendHost = tolower(tostring(parse_url(tostring(BackendUrl)).Host))
         | project
             RequestTime = TimeGenerated,
             CorrelationId,
             UserId,
             UserLabel,
             RequestedModel,
+            BackendHost,
             ResponseCode = toint(ResponseCode),
             BackendResponseCode = toint(BackendResponseCode),
             TotalTimeMs = todouble(TotalTime),
@@ -83,12 +85,16 @@ locals {
         | join kind=leftouter Tokens on CorrelationId
         | extend Model = coalesce(DeploymentName, ModelName, RequestedModel, "unknown")
         | extend
+            BackendHost = iff(isempty(BackendHost), "(not logged)", BackendHost),
             PromptTokens = coalesce(PromptTokens, tolong(0)),
             CompletionTokens = coalesce(CompletionTokens, tolong(0)),
             TotalTokens = coalesce(TotalTokens, tolong(0))
         | extend
             IsSuccess = ResponseCode between (200 .. 299)
     );
+    let CurrentBackendRequests =
+        RequestData
+        | join kind=inner (ModelLimits | project Model, BackendHost = ConfiguredBackendHost) on Model, BackendHost;
     let MetricRows = materialize(
         AppMetrics
         | where TimeGenerated {TimeRange}
@@ -182,7 +188,7 @@ locals {
             사용자·모델별 사용량, uncached/cached input token, 비용 추정, 오류, 지연, 모델 TPM headroom과 APIM 용량을 한 화면에서 확인합니다.
             사용자 식별자는 `tid:oid` 또는 `iss:sub`의 SHA-256 해시이며 이름·메일·원본 object ID는 저장하지 않습니다.
 
-            **모델 한도:** ${join(" · ", [for model_name in local.routed_models : "${model_name} ${local.model_capacity_tpm[model_name]} TPM"])}
+            **현재 백엔드 계정 리전 및 모델 한도:** ${join(" · ", [for model_name in local.routed_models : "${model_name} (${try(local.model_locations[model_name], "unconfigured")}) ${try(local.model_capacity_tpm[model_name], 0)} TPM"])}
 
             **비용 입력:** ${local.governance_pricing_summary}. 단가가 0이면 비용은 의도적으로 0으로 표시합니다.
           MARKDOWN
@@ -354,8 +360,10 @@ locals {
                 EstimatedCostUsd = round(sum(EstimatedCostUsd), 4),
                 PriceConfiguredRows = countif(IsPriceConfigured)
                 by Model
+            | join kind=leftouter (ModelLimits | project Model, ConfiguredRegion) on Model
             | join kind=leftouter RequestSummary on Model
             | extend
+                ConfiguredRegion = iff(isempty(ConfiguredRegion), "unconfigured", ConfiguredRegion),
                 CachedInputSharePct = iff(
                     PromptTokens == 0,
                     0.0,
@@ -365,7 +373,7 @@ locals {
                 Successful = coalesce(Successful, tolong(0)),
                 SuccessRatePct = iff(Requests == 0, 0.0, round(100.0 * todouble(Successful) / todouble(Requests), 2)),
                 Pricing = iff(PriceConfiguredRows > 0, "configured", "zero/unset")
-            | project Model, Requests, ActiveUsers, UncachedInputTokens, CachedInputTokens,
+            | project Model, ConfiguredRegion, Requests, ActiveUsers, UncachedInputTokens, CachedInputTokens,
                 CachedInputSharePct, CompletionTokens, TotalTokens, EstimatedCostUsd, Pricing,
                 SuccessRatePct, P95LatencyMs
             | order by TotalTokens desc
@@ -566,14 +574,13 @@ locals {
         type = 3
         name = "model-tpm"
         content = merge(local.governance_query_common, {
-          title         = "Model TPM versus deployed limit"
+          title         = "Model TPM versus current backend limit"
           visualization = "timechart"
           query         = <<-KQL
             ${local.governance_base_query}
             let Grain = {TimeRange:grain};
             let ModelTpm =
-                RequestData
-                | where Model != "unknown"
+                CurrentBackendRequests
                 | summarize Tokens = sum(TotalTokens) by TimeGenerated = bin(RequestTime, Grain), Model
                 | join kind=inner ModelLimits on Model
                 | extend TokensPerMinute = round(todouble(Tokens) / max_of(1.0, todouble(Grain / 1m)), 0);
@@ -588,20 +595,18 @@ locals {
         type = 3
         name = "model-headroom"
         content = merge(local.governance_query_common, {
-          title        = "Model peak and headroom"
+          title        = "Current backend peak and headroom"
           gridSettings = local.governance_grid_settings
           query        = <<-KQL
             ${local.governance_base_query}
             let MinuteUsage =
-                RequestData
-                | where Model != "unknown"
+                CurrentBackendRequests
                 | summarize TPM = sum(TotalTokens), RPM = count() by Model, bin(RequestTime, 1m);
             let Peaks =
                 MinuteUsage
                 | summarize PeakTPM = max(TPM), PeakRPM = max(RPM) by Model;
             let Errors =
-                RequestData
-                | where Model != "unknown"
+                CurrentBackendRequests
                 | summarize RateLimited429 = countif(ResponseCode == 429), ServiceUnavailable503 = countif(ResponseCode == 503) by Model;
             ModelLimits
             | join kind=leftouter Peaks on Model
@@ -614,7 +619,7 @@ locals {
             | extend
                 PeakUtilizationPct = round(100.0 * todouble(PeakTPM) / todouble(TpmLimit), 2),
                 HeadroomAtPeak = max_of(TpmLimit - PeakTPM, tolong(0))
-            | project Model, TpmLimit, PeakTPM, PeakUtilizationPct, HeadroomAtPeak, PeakRPM,
+            | project Model, ConfiguredRegion, ConfiguredBackendHost, TpmLimit, PeakTPM, PeakUtilizationPct, HeadroomAtPeak, PeakRPM,
                 RateLimited429, ServiceUnavailable503
             | order by PeakUtilizationPct desc
           KQL
@@ -810,7 +815,7 @@ locals {
                 AffectedUsers = dcountif(UserId, UserId != "anonymous"),
                 Reasons = strcat_array(make_set(Reason, 10), ", "),
                 LastSeen = max(RequestTime)
-                by ResponseCode, Model
+                by ResponseCode, Model, BackendHost
             | order by Attempts desc
           KQL
         })
@@ -830,9 +835,9 @@ locals {
                 TotalTokens = sum(TotalTokens),
                 Successful = countif(IsSuccess),
                 P95LatencyMs = round(percentile(TotalTimeMs, 95), 0)
-                by OperationId, Model
+                by OperationId, Model, BackendHost
             | extend SuccessRatePct = round(100.0 * todouble(Successful) / todouble(Requests), 2)
-            | project OperationId, Model, Requests, ActiveUsers, TotalTokens, SuccessRatePct, P95LatencyMs
+            | project OperationId, Model, BackendHost, Requests, ActiveUsers, TotalTokens, SuccessRatePct, P95LatencyMs
             | order by Requests desc
           KQL
         })
@@ -849,7 +854,7 @@ locals {
             | where ResponseCode >= 400
             | extend Reason = iff(isempty(LastErrorReason), "policy/client response", LastErrorReason)
             | summarize Errors = count(), AffectedUsers = dcountif(UserId, UserId != "anonymous"), LastSeen = max(RequestTime)
-                by ResponseCode, BackendResponseCode, Reason, Model
+                by ResponseCode, BackendResponseCode, Reason, Model, BackendHost
             | top 30 by Errors desc
           KQL
         })
@@ -867,6 +872,8 @@ locals {
             * GPT-5.6 cache write token은 현재 APIM preview metric에서 별도로 제공하지 않으므로 추정 비용에 포함되지 않습니다.
             * 스트리밍 요청이 중간 취소되면 usage 청크가 없어 zero-token으로 남을 수 있습니다.
             * `Estimated cost`는 Terraform의 `model_pricing_usd_per_million` 값만 사용하며 Azure 청구서가 아닙니다.
+            * 모델별 사용량·비용은 조회 기간의 전체 백엔드 합계입니다. `ConfiguredRegion`은 현재 백엔드 계정 리전이며 실제 추론 처리 위치가 아닙니다.
+            * TPM 한도 비교는 현재 백엔드 호스트의 요청만 집계합니다. 요청·오류 상세 표는 로그에 기록된 호스트별로 나뉘며, 호스트가 없는 요청은 `(not logged)`로 표시합니다.
             * APIM custom metric은 dimension당 최대 100개 값과 namespace당 최대 1,000 active time series 제한이 있어 사용자 수가 커지면 별도 telemetry pipeline이 필요합니다.
             * APIM Capacity 차트는 플랫폼 Metrics를 직접 조회합니다.
             * Gateway CPU/Memory metric은 APIM v2 SKU 전용입니다. 현재 classic SKU에서는 Capacity가 해당 상태 지표입니다.

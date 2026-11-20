@@ -147,7 +147,7 @@ subscription은 사용하지 않습니다.
 |---|---|
 | `model_deployments` | 이 Terraform이 생성하고 관리하는 모델 배포 |
 | `project_model_deployments` | 다른 Foundry 프로젝트에 이미 존재하는 모델 연결 |
-| `managed_foundry_account_enabled` | `null` 자동 생성, `true` 빈 계정 유지, `false` 관리형 계정 비활성화 |
+| `managed_foundry_account_enabled` | `null` 사용 리전만 자동 생성, `true` APIM 리전의 빈 계정도 유지, `false` 관리형 계정 비활성화 |
 | `routed_models` | APIM policy가 요청을 전달할 모델 목록 |
 | `opencode_default_model` | OpenCode 시작 시 선택할 routed model |
 | `opencode_small_model` | OpenCode 경량 작업에 사용할 routed model |
@@ -157,10 +157,21 @@ subscription은 사용하지 않습니다.
 기존 프로젝트 모델은 Chat이 기본값입니다. 기존 프로젝트의 GPT 모델처럼 Responses를 사용해야
 하면 해당 항목에 `opencode_api = "responses"`를 지정합니다.
 
-`model_deployments = {}`이고 `managed_foundry_account_enabled = null`이면 Gateway 전용 Foundry
-계정을 생성하지 않습니다. 나중에 `model_deployments`에 첫 모델을 추가하면 같은 apply에서 계정,
-RBAC, 모델 배포와 APIM backend를 생성합니다. 마지막 관리형 모델을 제거한 뒤 빈 계정을 유지하려면
-제거 전에 `managed_foundry_account_enabled = true`를 적용합니다.
+`model_deployments` 항목에 `location = "westus3"`처럼 지정하면 APIM 리전은 그대로 두고 해당
+리전에 Foundry 계정과 모델 배포를 생성합니다. 같은 리전의 모델은 계정을 공유하고, `location`을
+생략하면 상위 `location`(APIM 리전)의 계정을 사용합니다. APIM 관리 ID 권한, IP 허용 규칙,
+모델별 backend URL도 Terraform에서 설정합니다.
+
+선택한 리전의 [모델·SKU 지원과 할당량](https://learn.microsoft.com/azure/foundry/openai/how-to/quota#programmatically-check-quota-and-capacity)을
+먼저 확인합니다. 해당 리전의 마지막 모델 배포를 제거하면 더 이상 쓰지 않는 계정도 제거됩니다.
+APIM 리전의 계정을 남기려면 `managed_foundry_account_enabled = true`를 지정합니다.
+
+배포 이름 하나에는 리전 하나만 지정할 수 있습니다. 기존 모델의 `location`을 바꾸면 배포가 교체되어
+호출이 중단될 수 있습니다.
+
+워크북의 `ConfiguredRegion`은 현재 백엔드 계정 리전입니다. 과거 요청·오류는 로그의
+`BackendHost`로 구분하며, `GlobalStandard`의 실제 추론 처리 지역은 계정 리전과 다를 수 있습니다.
+[Microsoft Learn: Foundry 배포 유형과 데이터 처리 위치](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types).
 
 **모델 추가**
 
