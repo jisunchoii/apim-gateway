@@ -30,17 +30,31 @@ locals {
   }
 
   apim_name         = "apim-${local.name_suffix}-${local.sfx}"
-  foundry_name      = "ais-${local.name_suffix}-${local.sfx}"
-  foundry_openai_v1 = "https://${local.foundry_name}.openai.azure.com/openai/v1"
   app_insights_name = "appi-${local.name_suffix}"
 
-  managed_foundry_account_enabled = coalesce(
-    var.managed_foundry_account_enabled,
-    length(var.model_deployments) > 0
+  managed_model_locations = {
+    for model_name, deployment in var.model_deployments :
+    model_name => deployment.location == null ? var.location : deployment.location
+  }
+  managed_model_account_keys = {
+    for model_name, location in local.managed_model_locations :
+    model_name => location == var.location ? "gateway" : "region-${location}"
+  }
+  managed_foundry_accounts = merge(
+    coalesce(var.managed_foundry_account_enabled, contains(values(local.managed_model_locations), var.location)) ? {
+      gateway = {
+        location = var.location
+        name     = "ais-${local.name_suffix}-${local.sfx}"
+      }
+    } : {},
+    {
+      for location in toset(values(local.managed_model_locations)) :
+      "region-${location}" => {
+        location = location
+        name     = "ais-${var.prefix}-${var.env}-r-${location}-${local.sfx}"
+      } if location != var.location
+    },
   )
-  managed_foundry_accounts = local.managed_foundry_account_enabled ? {
-    gateway = true
-  } : {}
 
   external_foundry_project_ids = toset([
     for deployment in values(var.project_model_deployments) :
@@ -50,7 +64,8 @@ locals {
   managed_model_targets = {
     for model_name, deployment in var.model_deployments :
     model_name => {
-      backend_url   = local.foundry_openai_v1
+      location      = local.managed_model_locations[model_name]
+      backend_url   = "https://${azurerm_cognitive_account.foundry[local.managed_model_account_keys[model_name]].custom_subdomain_name}.openai.azure.com/openai/v1"
       auth_resource = "https://cognitiveservices.azure.com"
       capacity_tpm  = deployment.capacity * 1000
       opencode_api  = deployment.opencode_api
@@ -59,6 +74,7 @@ locals {
   project_model_targets = {
     for model_name, deployment in var.project_model_deployments :
     model_name => {
+      location = lower(replace(tostring(try(data.azapi_resource.external_foundry_project[deployment.project_resource_id].output.location, "external")), " ", ""))
       backend_url = "${trimsuffix(
         tostring(data.azapi_resource.external_foundry_project[deployment.project_resource_id].output.properties.endpoints["AI Foundry API"]),
         "/"
@@ -70,6 +86,7 @@ locals {
   }
   model_targets      = merge(local.managed_model_targets, local.project_model_targets)
   deployed_models    = sort(keys(local.model_targets))
+  model_locations    = { for model_name, target in local.model_targets : model_name => target.location }
   model_capacity_tpm = { for model_name, target in local.model_targets : model_name => target.capacity_tpm }
   model_backend_ids = {
     for model_name in local.deployed_models :
@@ -97,6 +114,7 @@ locals {
   api_catalog_models = [
     for model_name in local.routed_models : {
       name             = model_name
+      location         = local.model_targets[model_name].location
       source           = contains(keys(var.model_deployments), model_name) ? "gateway-managed" : "external-project"
       backend_id       = local.model_backend_ids[model_name]
       backend_url      = local.model_targets[model_name].backend_url

@@ -35,12 +35,12 @@ resource "azurerm_api_management" "apim" {
 resource "azurerm_cognitive_account" "foundry" {
   for_each = local.managed_foundry_accounts
 
-  name                       = local.foundry_name
+  name                       = each.value.name
   resource_group_name        = azurerm_resource_group.rg.name
-  location                   = var.location
+  location                   = each.value.location
   kind                       = "AIServices"
   sku_name                   = "S0"
-  custom_subdomain_name      = local.foundry_name
+  custom_subdomain_name      = each.value.name
   project_management_enabled = true
   tags                       = local.tags
 
@@ -72,13 +72,13 @@ data "azapi_resource" "external_foundry_project" {
 
   type                   = "Microsoft.CognitiveServices/accounts/projects@2025-06-01"
   resource_id            = each.value
-  response_export_values = ["properties.endpoints"]
+  response_export_values = ["location", "properties.endpoints"]
 }
 
 resource "azurerm_cognitive_deployment" "models" {
   for_each             = var.model_deployments
   name                 = each.key
-  cognitive_account_id = azurerm_cognitive_account.foundry["gateway"].id
+  cognitive_account_id = azurerm_cognitive_account.foundry[local.managed_model_account_keys[each.key]].id
 
   model {
     format  = each.value.model_format
@@ -97,13 +97,16 @@ resource "azurerm_cognitive_deployment" "models" {
 # Gateway는 Azure OpenAI 호환 추론 작업만 제공하므로 범위가 넓은 Cognitive Services User 대신
 # 모델 추론에 필요한 Cognitive Services OpenAI User 역할만 부여한다.
 resource "azurerm_role_assignment" "apim_to_foundry" {
-  for_each = local.managed_foundry_account_enabled ? toset([
-    "Cognitive Services OpenAI User"
-  ]) : toset([])
+  for_each = azurerm_cognitive_account.foundry
 
-  scope                = azurerm_cognitive_account.foundry["gateway"].id
-  role_definition_name = each.key
+  scope                = each.value.id
+  role_definition_name = "Cognitive Services OpenAI User"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
+}
+
+moved {
+  from = azurerm_role_assignment.apim_to_foundry["Cognitive Services OpenAI User"]
+  to   = azurerm_role_assignment.apim_to_foundry["gateway"]
 }
 
 resource "azurerm_role_assignment" "apim_to_external_foundry_project" {
@@ -143,7 +146,7 @@ resource "azurerm_monitor_diagnostic_setting" "apim" {
 }
 
 # 모델마다 APIM backend를 하나씩 생성하여 circuit breaker 상태를 모델별로 분리한다.
-# Terraform이 관리하는 모델은 이 stack의 Azure OpenAI endpoint를 사용하고, 외부 프로젝트 모델은
+# Terraform이 관리하는 모델은 배포된 Foundry 계정의 endpoint를 사용하고, 외부 프로젝트 모델은
 # 기존 Foundry project endpoint를 사용하면서 모델 배포 수명주기는 원본 프로젝트가 계속 관리한다.
 resource "azurerm_api_management_backend" "model" {
   for_each            = local.model_targets
@@ -174,6 +177,11 @@ resource "azurerm_api_management_backend" "model" {
       }
     }
   }
+
+  depends_on = [
+    azurerm_cognitive_deployment.models,
+    azurerm_role_assignment.apim_to_foundry,
+  ]
 }
 
 resource "azurerm_api_management_api" "gateway" {

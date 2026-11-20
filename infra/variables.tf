@@ -42,7 +42,7 @@ variable "trace_source" {
 
 variable "location" {
   type        = string
-  description = "Azure region for every resource. Verify model availability in this region first."
+  description = "Azure region for the gateway infrastructure and the default region for managed model deployments."
 
   validation {
     condition     = can(regex("^[a-z0-9]+$", var.location))
@@ -106,9 +106,9 @@ variable "managed_foundry_account_enabled" {
   default     = null
   nullable    = true
   description = <<-EOT
-    Controls the gateway-owned Foundry account used by model_deployments. Null creates the account
-    automatically when model_deployments is non-empty. True keeps the account even when no managed
-    deployments remain. False disables the account and requires model_deployments to be empty.
+    Null creates managed Foundry accounts only in regions used by model_deployments. True also
+    keeps the account in the gateway region even when no deployment uses it. False disables
+    managed accounts and requires model_deployments to be empty.
   EOT
 
   validation {
@@ -129,6 +129,7 @@ variable "model_deployments" {
     sku_name               = string
     capacity               = number
     opencode_api           = optional(string, "responses")
+    location               = optional(string)
   }))
   description = <<-EOT
     Model deployments keyed by deployment name. Keep the deployment name identical to the model name so
@@ -136,8 +137,17 @@ variable "model_deployments" {
     of tokens per minute for GlobalStandard, so 20000 == 20M TPM -- but apply fails if it exceeds the
     region's granted quota, which defaults to single-digit millions. Check with
     `az cognitiveservices usage list -l <region> -o table` and request an increase before raising it.
+    location defaults to the gateway region and selects the Foundry account's deployment region.
     opencode_api selects the OpenCode provider protocol and defaults to responses.
   EOT
+
+  validation {
+    condition = alltrue([
+      for deployment in values(var.model_deployments) :
+      deployment.location == null || can(regex("^[a-z0-9]+$", deployment.location))
+    ])
+    error_message = "Every managed model location must use a canonical lowercase Azure region name, such as eastus2."
+  }
 
   validation {
     condition = alltrue([
